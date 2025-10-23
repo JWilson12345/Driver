@@ -1,0 +1,988 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fish & Chips Delivery Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.22.5/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    .fade-down {
+      animation: fadeDown 0.5s ease-out forwards;
+    }
+    @keyframes fadeDown {
+      from { opacity: 1; transform: translateY(0); }
+      to { opacity: 0; transform: translateY(20px); }
+    }
+    .slide-up {
+      animation: slideUp 0.5s ease-out forwards;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(0); }
+      to { transform: translateY(-100%); }
+    }
+    .fade-out {
+      animation: fadeOut 0.3s ease-out forwards;
+    }
+    @keyframes fadeOut {
+      from { opacity: 1; }
+      to { opacity: 0; }
+    }
+    .fade-in {
+      animation: fadeIn 0.3s ease-in forwards;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .scale-transition {
+      transition: transform 0.2s ease;
+    }
+    .scale-transition:hover {
+      transform: scale(1.05);
+    }
+    .dark {
+      background: linear-gradient(135deg, #1a202c, #2d3748);
+    }
+    .light {
+      background: #a8a8a8;
+    }
+    .app-container {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .content {
+      flex: 1 0 auto;
+      overflow-y: auto;
+    }
+    .delivery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 0.75rem;
+    }
+    .delivery-grid > div {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    .dark .delivery-grid > div {
+      background-color: #2d3748;
+    }
+    .light .delivery-grid > div {
+      background-color: #e5e7eb;
+    }
+    .dark .delivery-grid > div:hover {
+      background-color: #4a5568;
+    }
+    .light .delivery-grid > div:hover {
+      background-color: #d1d5db;
+    }
+    .delivery-grid span {
+      font-size: clamp(0.75rem, 3vw, 0.875rem);
+      margin-top: 0.5rem;
+    }
+    .dark .delivery-grid span {
+      color: #ffffff;
+    }
+    .light .delivery-grid span {
+      color: #111827;
+    }
+    .delivery-grid button {
+      margin-top: 0.5rem;
+      font-size: clamp(0.75rem, 3vw, 0.875rem);
+    }
+    .delivery-list > div {
+      transition: transform 0.5s ease-out;
+    }
+    .toast {
+      position: fixed;
+      bottom: 10rem;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 1rem;
+      border-radius: 0.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      z-index: 50;
+      max-width: 90vw;
+    }
+    .dark .toast {
+      background-color: #2d3748;
+      color: #ffffff;
+    }
+    .light .toast {
+      background-color: #e5e7eb;
+      color: #111827;
+    }
+    .changelog-container {
+      flex-shrink: 0;
+      width: 100%;
+      max-width: 90vw;
+      margin: 0 auto;
+      padding: 1rem 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .changelog-list {
+      padding-left: 1.5rem;
+    }
+    .changelog-list > li {
+      margin-bottom: 0.5rem;
+    }
+    .changelog-list .added {
+      color: #10b981;
+      list-style-type: "➕ ";
+    }
+    .changelog-close {
+      position: fixed;
+      bottom: 1rem;
+      right: 1rem;
+      z-index: 60;
+    }
+    .delivery-display {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .keypad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+    .keypad-button {
+      padding: 1rem;
+      font-size: clamp(1rem, 4vw, 1.25rem);
+      border-radius: 0.5rem;
+      text-align: center;
+      cursor: pointer;
+      user-select: none;
+      transition: background-color 0.2s ease;
+    }
+    .dark .keypad-button {
+      background-color: #4a5568;
+      color: #ffffff;
+    }
+    .light .keypad-button {
+      background-color: #d1d5db;
+      color: #111827;
+    }
+    .dark .keypad-button:hover {
+      background-color: #718096;
+    }
+    .light .keypad-button:hover {
+      background-color: #a0aec0;
+    }
+  </style>
+</head>
+<body class="dark">
+  <div id="root"></div>
+  <script type="text/babel">
+    const NumberKeypad = ({ value, onChange }) => {
+      const handleKeyPress = (key) => {
+        if (key === 'backspace') {
+          onChange(value.slice(0, -1));
+        } else if (key === '.' && !value.includes('.')) {
+          onChange(value + key);
+        } else if (/[0-9]/.test(key)) {
+          onChange(value + key);
+        }
+      };
+
+      const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'backspace'];
+
+      return (
+        <div className="keypad">
+          {keys.map((key, index) => (
+            <div
+              key={index}
+              className="keypad-button"
+              onClick={() => handleKeyPress(key)}
+            >
+              {key === 'backspace' ? '←' : key}
+            </div>
+          ))}
+        </div>
+      );
+    };
+
+    const App = () => {
+      const [deliveryList, setDeliveryList] = React.useState(() => {
+        const saved = localStorage.getItem('deliveryList');
+        return saved ? JSON.parse(saved) : [];
+      });
+      const [historyList, setHistoryList] = React.useState(() => {
+        const saved = localStorage.getItem('historyList');
+        return saved ? JSON.parse(saved) : [];
+      });
+      const [showDeliveryPopup, setShowDeliveryPopup] = React.useState(false);
+      const [showPaymentPopup, setShowPaymentPopup] = React.useState(false);
+      const [showHistoryPopup, setShowHistoryPopup] = React.useState(false);
+      const [postcode, setPostcode] = React.useState('');
+      const [amountDue, setAmountDue] = React.useState('');
+      const [paymentStatus, setPaymentStatus] = React.useState('paid');
+      const [showResetConfirm, setShowResetConfirm] = React.useState(false);
+      const [showDeliveryInfo, setShowDeliveryInfo] = React.useState(null);
+      const [showChangelogPopup, setShowChangelogPopup] = React.useState(false);
+      const [fadingItemIndex, setFadingItemIndex] = React.useState(null);
+      const [slidingItems, setSlidingItems] = React.useState([]);
+      const [isClosingDeliveryPopup, setIsClosingDeliveryPopup] = React.useState(false);
+      const [isClosingPaymentPopup, setIsClosingPaymentPopup] = React.useState(false);
+      const [isClosingResetPopup, setIsClosingResetPopup] = React.useState(false);
+      const [isClosingDeliveryInfo, setIsClosingDeliveryInfo] = React.useState(false);
+      const [isClosingChangelogPopup, setIsClosingChangelogPopup] = React.useState(false);
+      const [isClosingHistoryPopup, setIsClosingHistoryPopup] = React.useState(false);
+      const [isGridView, setIsGridView] = React.useState(false);
+      const [isDarkMode, setIsDarkMode] = React.useState(() => {
+        const saved = localStorage.getItem('isDarkMode');
+        return saved !== null ? JSON.parse(saved) : true;
+      });
+      const [showToast, setShowToast] = React.useState(false);
+      const [lastAction, setLastAction] = React.useState(null);
+
+      React.useEffect(() => {
+        localStorage.setItem('deliveryList', JSON.stringify(deliveryList));
+      }, [deliveryList]);
+
+      React.useEffect(() => {
+        localStorage.setItem('historyList', JSON.stringify(historyList));
+      }, [historyList]);
+
+      React.useEffect(() => {
+        localStorage.setItem('isDarkMode', JSON.stringify(isDarkMode));
+        document.body.className = isDarkMode ? 'dark' : 'light';
+      }, [isDarkMode]);
+
+      React.useEffect(() => {
+        if (showToast) {
+          const timer = setTimeout(() => {
+            setShowToast(false);
+            setLastAction(null);
+          }, 5000);
+          return () => clearTimeout(timer);
+        }
+      }, [showToast]);
+
+      const formatPostcode = (input) => {
+        const cleaned = input.replace(/\s/g, '').toUpperCase();
+        const regex = /^([A-Z]{1,2}\d{1,2}[A-Z]?)?(\d[A-Z]{2})?$/;
+        const match = cleaned.match(regex);
+        if (match && match[1] && match[2]) {
+          return `${match[1]} ${match[2]}`;
+        }
+        return cleaned;
+      };
+
+      const getOrdinalSuffix = (day) => {
+        if (day > 3 && day < 21) return 'th';
+        switch (day % 10) {
+          case 1: return 'st';
+          case 2: return 'nd';
+          case 3: return 'rd';
+          default: return 'th';
+        }
+      };
+
+      const formatTimestamp = (timestamp) => {
+        const date = new Date(timestamp);
+        const day = date.getDate();
+        const month = date.getMonth() + 1;
+        const year = date.getFullYear();
+        const hours = date.getHours();
+        const minutes = date.getMinutes();
+        const ampm = hours >= 12 ? 'pm' : 'am';
+        const hours12 = hours % 12 || 12;
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        
+        const formattedDate = `${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}/${year}`;
+        const formattedDay = `${dayNames[date.getDay()]} ${day}${getOrdinalSuffix(day)} ${monthNames[month - 1]}`;
+        const formattedTime = `${hours12}:${minutes.toString().padStart(2, '0')}${ampm}`;
+        
+        return {
+          date: formattedDate,
+          day: formattedDay,
+          time: formattedTime
+        };
+      };
+
+      const calculateChange = (due) => {
+        const amount = parseFloat(due) || 0;
+        if (amount <= 0) return 0;
+        const threshold = Math.ceil(amount / 20) * 20;
+        return (threshold - amount).toFixed(2);
+      };
+
+      const handlePostcodeChange = (e) => {
+        setPostcode(formatPostcode(e.target.value));
+      };
+
+      const addDelivery = () => {
+        if (!postcode.trim()) {
+          setShowToast(true);
+          setLastAction({ type: 'error', data: 'Postcode cannot be empty.' });
+          return;
+        }
+        if (paymentStatus === 'not-paid' && (!amountDue || parseFloat(amountDue) <= 0)) {
+          setShowToast(true);
+          setLastAction({ type: 'error', data: 'Amount due must be greater than £0.' });
+          return;
+        }
+        const delivery = {
+          postcode,
+          paymentStatus,
+          amountDue: paymentStatus === 'not-paid' ? parseFloat(amountDue) || 0 : 0,
+          changeDue: paymentStatus === 'not-paid' ? calculateChange(amountDue) : 0,
+          timestamp: new Date().toISOString(),
+        };
+        setDeliveryList([delivery, ...deliveryList]);
+        setLastAction({ type: 'add', data: delivery });
+        setShowToast(true);
+        setIsClosingPaymentPopup(true);
+        setTimeout(() => {
+          setShowDeliveryPopup(false);
+          setShowPaymentPopup(false);
+          setIsClosingPaymentPopup(false);
+          setPostcode('');
+          setAmountDue('');
+          setPaymentStatus('paid');
+        }, 300);
+      };
+
+      const addPaidDelivery = () => {
+        if (!postcode.trim()) {
+          setShowToast(true);
+          setLastAction({ type: 'error', data: 'Postcode cannot be empty.' });
+          return;
+        }
+        const delivery = {
+          postcode,
+          paymentStatus: 'paid',
+          amountDue: 0,
+          changeDue: 0,
+          timestamp: new Date().toISOString(),
+        };
+        setDeliveryList([delivery, ...deliveryList]);
+        setLastAction({ type: 'add', data: delivery });
+        setShowToast(true);
+        setIsClosingDeliveryPopup(true);
+        setTimeout(() => {
+          setShowDeliveryPopup(false);
+          setIsClosingDeliveryPopup(false);
+          setPostcode('');
+          setPaymentStatus('paid');
+        }, 300);
+      };
+
+      const markDelivered = (index) => {
+        setFadingItemIndex(index);
+        const item = deliveryList[index];
+        setHistoryList([item, ...historyList]);
+        setLastAction({ type: 'deliver', data: { ...item, index } });
+        setShowToast(true);
+        const itemsToSlide = isGridView ? [] : deliveryList.filter((_, i) => i > index).map((_, i) => index + i + 1);
+        setSlidingItems(itemsToSlide);
+        setTimeout(() => {
+          const updatedList = deliveryList.filter((_, i) => i !== index);
+          setDeliveryList(updatedList);
+          setFadingItemIndex(null);
+          setSlidingItems([]);
+        }, 500);
+        setIsClosingDeliveryInfo(true);
+        setTimeout(() => {
+          setShowDeliveryInfo(null);
+          setIsClosingDeliveryInfo(false);
+        }, 300);
+      };
+
+      const resetDay = () => {
+        setLastAction({ type: 'reset', data: { deliveryList: [...deliveryList], historyList: [...historyList] } });
+        setShowToast(true);
+        setDeliveryList([]);
+        setHistoryList([]);
+        setIsClosingResetPopup(true);
+        setTimeout(() => {
+          setShowResetConfirm(false);
+          setIsClosingResetPopup(false);
+        }, 300);
+      };
+
+      const undoAction = () => {
+        if (lastAction?.type === 'add') {
+          setDeliveryList(deliveryList.slice(1));
+        } else if (lastAction?.type === 'deliver') {
+          const { data } = lastAction;
+          const updatedList = [...deliveryList];
+          updatedList.splice(data.index, 0, data);
+          setDeliveryList(updatedList);
+          setHistoryList(historyList.slice(1));
+        } else if (lastAction?.type === 'reset') {
+          setDeliveryList(lastAction.data.deliveryList);
+          setHistoryList(lastAction.data.historyList);
+        }
+        setShowToast(false);
+        setLastAction(null);
+      };
+
+      const toggleView = () => {
+        setIsGridView(!isGridView);
+      };
+
+      const toggleTheme = () => {
+        setIsDarkMode(!isDarkMode);
+      };
+
+      const toggleChangelogPopup = () => {
+        if (showChangelogPopup) {
+          setIsClosingChangelogPopup(true);
+          setTimeout(() => {
+            setShowChangelogPopup(false);
+            setIsClosingChangelogPopup(false);
+          }, 300);
+        } else {
+          setShowChangelogPopup(true);
+        }
+      };
+
+      const toggleHistoryPopup = () => {
+        if (showHistoryPopup) {
+          setIsClosingHistoryPopup(true);
+          setTimeout(() => {
+            setShowHistoryPopup(false);
+            setIsClosingHistoryPopup(false);
+          }, 300);
+        } else {
+          setShowHistoryPopup(true);
+        }
+      };
+
+      return (
+        <div className="app-container">
+          <header className="w-full max-w-[90vw] mx-auto mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h1 className={`text-[clamp(1.5rem,5vw,2rem)] font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                Fish & Chips Delivery Tracker
+              </h1>
+              <div className="flex space-x-2">
+                <button
+                  onClick={toggleView}
+                  className="w-10 h-10 rounded-full bg-blue-700 text-white flex items-center justify-center text-lg font-semibold hover:bg-blue-600 scale-transition"
+                  aria-label="Toggle view"
+                >
+                  <i className={`fas ${isGridView ? 'fa-bars' : 'fa-th'}`}></i>
+                </button>
+                <button
+                  onClick={toggleTheme}
+                  className="w-10 h-10 rounded-full bg-blue-700 text-white flex items-center justify-center text-lg font-semibold hover:bg-blue-600 scale-transition"
+                  aria-label="Toggle theme"
+                >
+                  <i className={`fas ${isDarkMode ? 'fa-moon' : 'fa-sun'}`}></i>
+                </button>
+              </div>
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setShowDeliveryPopup(true)}
+                className={`flex-1 py-2 rounded-lg font-semibold text-white shadow-md hover:bg-green-600 ${isDarkMode ? 'bg-green-700' : 'bg-green-600'}`}
+              >
+                Add Delivery
+              </button>
+              <button
+                onClick={toggleHistoryPopup}
+                className={`flex-1 py-2 rounded-lg font-semibold text-white shadow-md hover:bg-blue-600 ${isDarkMode ? 'bg-blue-700' : 'bg-blue-600'}`}
+                aria-label="View delivery history"
+              >
+                Delivery History
+              </button>
+            </div>
+          </header>
+
+          <main className="content">
+            <div className="w-full max-w-[90vw] mx-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className={`text-[clamp(1.25rem,4vw,1.5rem)] font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Today's Deliveries
+                </h2>
+                <button
+                  onClick={() => setShowResetConfirm(true)}
+                  className="px-4 py-2 bg-red-700 text-white rounded-lg shadow-md hover:bg-red-600 text-[clamp(0.875rem,3vw,1rem)]"
+                >
+                  Reset Day
+                </button>
+              </div>
+              <p className={`text-[clamp(1rem,4vw,1.125rem)] font-semibold mb-4 ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                Total Deliveries: {deliveryList.length}
+              </p>
+              {deliveryList.length === 0 ? (
+                <p className={`text-center ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>No deliveries today.</p>
+              ) : (
+                <div className={isGridView ? 'delivery-grid' : 'space-y-3'}>
+                  {deliveryList.map((delivery, index) => (
+                    <div
+                      key={index}
+                      className={`flex ${isGridView ? '' : 'items-center justify-between p-3 rounded-lg shadow-md'} ${
+                        fadingItemIndex === index ? 'fade-down' : isGridView ? '' : slidingItems.includes(index) ? 'slide-up' : ''
+                      } ${isDarkMode ? 'bg-gray-800' : 'bg-gray-200'}`}
+                      onClick={() => setShowDeliveryInfo(index)}
+                    >
+                      <div className={isGridView ? 'delivery-display' : 'flex items-center delivery-display'}>
+                        <span className={isGridView ? '' : `text-[clamp(1rem,4vw,1.125rem)] ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                          {delivery.postcode} | {delivery.paymentStatus === 'paid' ? 'Paid' : `£${delivery.amountDue.toFixed(2)}`}
+                        </span>
+                      </div>
+                      {isGridView && (
+                        <button
+                          className="mt-2 px-3 py-1.5 bg-blue-700 text-white rounded-lg shadow-md hover:bg-blue-600 text-[clamp(0.75rem,3vw,0.875rem)]"
+                        >
+                          View
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </main>
+
+          <div className="changelog-container">
+            <button
+              onClick={toggleChangelogPopup}
+              className={`underline mb-4 ${isDarkMode ? 'text-gray-200 hover:text-blue-500' : 'text-gray-600 hover:text-blue-500'}`}
+            >
+              Changelog
+            </button>
+            <span className={isDarkMode ? 'text-gray-200' : 'text-gray-600'}>V1.6</span>
+          </div>
+
+          {showDeliveryPopup && (
+            <div
+              className={`fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center ${isClosingDeliveryPopup ? 'fade-out' : 'fade-in'}`}
+              onClick={() => {
+                setIsClosingDeliveryPopup(true);
+                setTimeout(() => {
+                  setShowDeliveryPopup(false);
+                  setIsClosingDeliveryPopup(false);
+                  setPostcode('');
+                  setPaymentStatus('paid');
+                }, 300);
+              }}
+            >
+              <div
+                className={`p-6 rounded-lg w-[90vw] max-w-md shadow-lg ${isDarkMode ? 'bg-gray-800' : 'bg-gray-200'}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h2 className={`text-[clamp(1.25rem,4vw,1.5rem)] font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Add New Delivery
+                </h2>
+                <input
+                  type="text"
+                  placeholder="Enter postcode (e.g., S714RF)"
+                  value={postcode}
+                  onChange={handlePostcodeChange}
+                  className={`w-full p-2 border rounded-lg mb-4 ${isDarkMode ? 'bg-gray-700 text-white placeholder-gray-400 border-gray-600' : 'bg-gray-200 text-gray-900 placeholder-gray-500 border-gray-300'}`}
+                  aria-label="Postcode"
+                />
+                <div className="flex justify-between mb-4">
+                  <button
+                    onClick={addPaidDelivery}
+                    className={`flex-1 py-2 rounded-lg font-semibold text-white shadow-md hover:bg-green-600 ${paymentStatus === 'paid' ? (isDarkMode ? 'bg-green-700' : 'bg-green-600') : (isDarkMode ? 'bg-gray-700' : 'bg-gray-400')}`}
+                  >
+                    Paid
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPaymentStatus('not-paid');
+                      setShowPaymentPopup(true);
+                    }}
+                    className={`flex-1 py-2 rounded-lg font-semibold text-white shadow-md hover:bg-red-600 ${paymentStatus === 'not-paid' ? (isDarkMode ? 'bg-red-700' : 'bg-red-600') : (isDarkMode ? 'bg-gray-700' : 'bg-gray-400')}`}
+                  >
+                    Not Paid
+                  </button>
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => {
+                      setIsClosingDeliveryPopup(true);
+                      setTimeout(() => {
+                        setShowDeliveryPopup(false);
+                        setIsClosingDeliveryPopup(false);
+                        setPostcode('');
+                        setPaymentStatus('paid');
+                      }, 300);
+                    }}
+                    className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-400 shadow-md text-[clamp(0.875rem,3vw,1rem)]"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showPaymentPopup && (
+            <div
+              className={`fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center ${isClosingPaymentPopup ? 'fade-out' : 'fade-in'}`}
+              onClick={() => {
+                setIsClosingPaymentPopup(true);
+                setTimeout(() => {
+                  setShowPaymentPopup(false);
+                  setIsClosingPaymentPopup(false);
+                  setAmountDue('');
+                }, 300);
+              }}
+            >
+              <div
+                className={`p-6 rounded-lg w-[90vw] max-w-md shadow-lg ${isDarkMode ? 'bg-gray-800' : 'bg-gray-200'}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h2 className={`text-[clamp(1.25rem,4vw,1.5rem)] font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Enter Amount Due
+                </h2>
+                <input
+                  type="text"
+                  readOnly
+                  value={amountDue}
+                  placeholder="Amount due (£)"
+                  className={`w-full p-2 border rounded-lg mb-4 ${isDarkMode ? 'bg-gray-700 text-white placeholder-gray-400 border-gray-600' : 'bg-gray-200 text-gray-900 placeholder-gray-500 border-gray-300'}`}
+                  aria-label="Amount due"
+                />
+                <NumberKeypad value={amountDue} onChange={setAmountDue} />
+                <div className="flex justify-end space-x-2 mt-4">
+                  <button
+                    onClick={() => {
+                      setIsClosingPaymentPopup(true);
+                      setTimeout(() => {
+                        setShowPaymentPopup(false);
+                        setIsClosingPaymentPopup(false);
+                        setAmountDue('');
+                      }, 300);
+                    }}
+                    className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-400 shadow-md text-[clamp(0.875rem,3vw,1rem)]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={addDelivery}
+                    className="px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-600 shadow-md text-[clamp(0.875rem,3vw,1rem)]"
+                  >
+                    Confirm
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showResetConfirm && (
+            <div
+              className={`fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center ${isClosingResetPopup ? 'fade-out' : 'fade-in'}`}
+              onClick={() => {
+                setIsClosingResetPopup(true);
+                setTimeout(() => {
+                  setShowResetConfirm(false);
+                  setIsClosingResetPopup(false);
+                }, 300);
+              }}
+            >
+              <div
+                className={`p-6 rounded-lg w-[90vw] max-w-md shadow-lg ${isDarkMode ? 'bg-gray-800' : 'bg-gray-200'}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <p className={`mb-4 text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
+                  Are you sure you want to reset today's delivery list and history?
+                </p>
+                <div className="flex justify-end space-x-2">
+                  <button
+                    onClick={() => {
+                      setIsClosingResetPopup(true);
+                      setTimeout(() => {
+                        setShowResetConfirm(false);
+                        setIsClosingResetPopup(false);
+                      }, 300);
+                    }}
+                    className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-400 shadow-md text-[clamp(0.875rem,3vw,1rem)]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={resetDay}
+                    className="px-4 py-2 bg-red-700 text-white rounded-lg hover:bg-red-600 shadow-md text-[clamp(0.875rem,3vw,1rem)]"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showDeliveryInfo !== null && (
+            <div
+              className={`fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center ${isClosingDeliveryInfo ? 'fade-out' : 'fade-in'}`}
+              onClick={() => {
+                setIsClosingDeliveryInfo(true);
+                setTimeout(() => {
+                  setShowDeliveryInfo(null);
+                  setIsClosingDeliveryInfo(false);
+                }, 300);
+              }}
+            >
+              <div
+                className={`p-6 rounded-lg w-[90vw] max-w-md shadow-lg ${isDarkMode ? 'bg-gray-800' : 'bg-gray-200'}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h2 className={`text-[clamp(1.25rem,4vw,1.5rem)] font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Delivery Details
+                </h2>
+                <p className={`mb-2 text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
+                  {deliveryList[showDeliveryInfo].postcode} | {deliveryList[showDeliveryInfo].paymentStatus === 'paid' ? 'Paid' : `£${deliveryList[showDeliveryInfo].amountDue.toFixed(2)}`}
+                </p>
+                {deliveryList[showDeliveryInfo].paymentStatus === 'not-paid' && (
+                  <p className={`mb-2 text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
+                    Change: £{deliveryList[showDeliveryInfo].changeDue}
+                  </p>
+                )}
+                <p className={`mb-2 text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
+                  <strong>Date:</strong> {formatTimestamp(deliveryList[showDeliveryInfo].timestamp).date}
+                </p>
+                <p className={`mb-2 text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
+                  <strong>Day:</strong> {formatTimestamp(deliveryList[showDeliveryInfo].timestamp).day}
+                </p>
+                <p className={`mb-4 text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
+                  <strong>Time:</strong> {formatTimestamp(deliveryList[showDeliveryInfo].timestamp).time}
+                </p>
+                <div className="flex justify-end space-x-2">
+                  <button
+                    onClick={() => {
+                      setIsClosingDeliveryInfo(true);
+                      setTimeout(() => {
+                        setShowDeliveryInfo(null);
+                        setIsClosingDeliveryInfo(false);
+                      }, 300);
+                    }}
+                    className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-400 shadow-md text-[clamp(0.875rem,3vw,1rem)]"
+                  >
+                    Close
+                  </button>
+                  <button
+                    onClick={() => markDelivered(showDeliveryInfo)}
+                    className="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-600 shadow-md text-[clamp(0.875rem,3vw,1rem)]"
+                  >
+                    Mark Delivered
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showHistoryPopup && (
+            <div
+              className={`fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center ${isClosingHistoryPopup ? 'fade-out' : 'fade-in'}`}
+              onClick={toggleHistoryPopup}
+            >
+              <div
+                className={`p-6 rounded-lg w-[90vw] max-w-md shadow-lg ${isDarkMode ? 'bg-gray-800 text-gray-200' : 'bg-gray-200 text-gray-900'}`}
+                onClick={(e) => e.stopPropagation()}
+                style={{ maxHeight: '70vh', overflowY: 'auto' }}
+              >
+                <h3 className={`text-[clamp(1.25rem,4vw,1.5rem)] font-bold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Delivery History
+                </h3>
+                {historyList.length === 0 ? (
+                  <p className={`text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
+                    No deliveries in history.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {historyList.map((delivery, index) => (
+                      <div
+                        key={index}
+                        className={`p-3 rounded-lg ${isDarkMode ? 'bg-gray-700' : 'bg-gray-300'}`}
+                      >
+                        <p className={`text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
+                          {delivery.postcode} | {delivery.paymentStatus === 'paid' ? 'Paid' : `£${delivery.amountDue.toFixed(2)}`}
+                        </p>
+                        {delivery.paymentStatus === 'not-paid' && (
+                          <p className={`text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
+                            Change: £{delivery.changeDue}
+                          </p>
+                        )}
+                        <p className={`text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
+                          <strong>Date:</strong> {formatTimestamp(delivery.timestamp).date}
+                        </p>
+                        <p className={`text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
+                          <strong>Day:</strong> {formatTimestamp(delivery.timestamp).day}
+                        </p>
+                        <p className={`text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
+                          <strong>Time:</strong> {formatTimestamp(delivery.timestamp).time}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex justify-end mt-4">
+                  <button
+                    onClick={toggleHistoryPopup}
+                    className="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-600 shadow-md text-[clamp(0.875rem,3vw,1rem)]"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showChangelogPopup && (
+            <div
+              className={`fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center ${isClosingChangelogPopup ? 'fade-out' : 'fade-in'}`}
+              onClick={toggleChangelogPopup}
+            >
+              <div
+                className={`p-6 rounded-lg w-[90vw] max-w-md shadow-lg ${isDarkMode ? 'bg-gray-800 text-gray-200' : 'bg-gray-200 text-gray-900'}`}
+                onClick={(e) => e.stopPropagation()}
+                style={{ maxHeight: '70vh', overflowY: 'auto' }}
+              >
+                <h3 className={`text-[clamp(1.25rem,4vw,1.5rem)] font-bold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Changelog
+                </h3>
+                <div className="changelog-list">
+                  <h4 className={`text-[clamp(1rem,3vw,1.125rem)] font-semibold mb-2 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>
+                    Version 1.6
+                  </h4>
+                  <ul>
+                    <li className="added">Added custom number keypad for Amount Due input with 0-9, decimal point, and backspace</li>
+                    <li className="added">Retained default keyboard for postcode input</li>
+                  </ul>
+                  <h4 className={`text-[clamp(1rem,3vw,1.125rem)] font-semibold mb-2 mt-4 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>
+                    Version 1.5
+                  </h4>
+                  <ul>
+                    <li className="added">Updated timestamp format to DD/MM/YYYY, Day DDth Month, HH:MMam/pm (e.g., 23/10/2025, Thursday 23rd October, 8:38pm)</li>
+                    <li className="added">Reset Day now clears both today's deliveries and history</li>
+                  </ul>
+                  <h4 className={`text-[clamp(1rem,3vw,1.125rem)] font-semibold mb-2 mt-4 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>
+                    Version 1.4
+                  </h4>
+                  <ul>
+                    <li className="added">Updated delivery display format to 'Postcode | Amount' (e.g., S71 4RF | £16.56)</li>
+                    <li className="added">Show change in delivery details and history for not-paid deliveries (e.g., Change: £3.44)</li>
+                  </ul>
+                  <h4 className={`text-[clamp(1rem,3vw,1.125rem)] font-semibold mb-2 mt-4 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>
+                    Version 1.3
+                  </h4>
+                  <ul>
+                    <li className="added">Simplified paid delivery to add directly without amount input</li>
+                    <li className="added">Added change calculation for not-paid deliveries (e.g., £16.99 → £3.01 change for £20)</li>
+                    <li className="added">Retained delivery history feature from Version 1.2</li>
+                  </ul>
+                  <h4 className={`text-[clamp(1rem,3vw,1.125rem)] font-semibold mb-2 mt-4 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>
+                    Version 1.2
+                  </h4>
+                  <ul>
+                    <li className="added">Added delivery history popup to view all past deliveries</li>
+                    <li className="added">Implemented change calculation for paid deliveries (e.g., £24.99 → £15.01 change)</li>
+                    <li className="added">Added input validation for amounts in paid/not-paid deliveries</li>
+                  </ul>
+                  <h4 className={`text-[clamp(1rem,3vw,1.125rem)] font-semibold mb-2 mt-4 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>
+                    Version 1.1
+                  </h4>
+                  <ul>
+                    <li className="added">Added changelog popup to track app updates</li>
+                    <li className="added">Restored changelog link at the bottom of the screen</li>
+                  </ul>
+                  <h4 className={`text-[clamp(1rem,3vw,1.125rem)] font-semibold mb-2 mt-4 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>
+                    Version 1.0
+                  </h4>
+                  <ul>
+                    <li className="added">Initial release with delivery tracking features</li>
+                    <li className="added">Added postcode auto-formatting for UK postcodes</li>
+                    <li className="added">Included paid/not paid selection with amount due input</li>
+                    <li className="added">Added delivery history with clickable details</li>
+                    <li className="added">Implemented reset day feature with confirmation</li>
+                    <li className="added">Added grid/list view toggle and dark/light mode</li>
+                    <li className="added">Included undo functionality for add, deliver, and reset actions</li>
+                    <li className="added">Added toast notifications for user actions</li>
+                    <li className="added">Designed clean and responsive UI with animations</li>
+                  </ul>
+                </div>
+              </div>
+              <button
+                onClick={toggleChangelogPopup}
+                className={`changelog-close px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-600 shadow-md text-[clamp(0.875rem,3vw,1rem)]`}
+              >
+                Close
+              </button>
+            </div>
+          )}
+
+          {showToast && (
+            <div className={`toast flex items-center space-x-4 fade-in`}>
+              <p className={`font-semibold text-[clamp(0.875rem,3vw,1rem)]`}>
+                {lastAction?.type === 'add' ? 'Delivery added.' : 
+                 lastAction?.type === 'deliver' ? 'Delivery marked as delivered.' : 
+                 lastAction?.type === 'reset' ? 'Delivery list and history reset.' : 
+                 lastAction?.type === 'error' ? lastAction.data : ''}
+              </p>
+              {lastAction?.type !== 'error' && (
+                <button
+                  onClick={undoAction}
+                  className="px-3 py-1 bg-blue-700 text-white rounded-lg hover:bg-blue-600 shadow-md text-[clamp(0.75rem,3vw,0.875rem)]"
+                >
+                  Undo
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>
