@@ -1120,68 +1120,59 @@
             )}
 
             {showChangelogPopup && (
-              <div
-                className={`fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center ${isClosingChangelogPopup ? 'fade-out' : 'fade-in'}`}
-                onClick={toggleChangelogPopup}
-              >
-                <div
-                  className={`p-6 rounded-lg w-[90vw] max-w-md shadow-lg ${isDarkMode ? 'bg-gray-800 text-gray-200' : 'bg-gray-200 text-gray-900'}`}
-                  onClick={(e) => e.stopPropagation()}
-                  style={{ maxHeight: '70vh', overflowY: 'auto' }}
-                >
-                  <h3 className={`text-[clamp(1.25rem,4vw,1.5rem)] font-bold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                    Changelog
-                  </h3>
-                  <div className="changelog-list space-y-4">
-                    <div>
-                      <h4 className={`text-[clamp(1rem,3vw,1.125rem)] font-semibold mb-2 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>v2.0</h4>
-                      <ul className="space-y-1 text-sm">
-                        <li><span className="added">➕ </span>Removed date display, kept day name only</li>
-                        <li><span className="added">➕ </span>Moved toast notifications to bottom of screen</li>
-                        <li><span className="added">➕ </span>Redesigned changelog with professional formatting</li>
-                      </ul>
-                    </div>
-                    <div>
-                      <h4 className={`text-[clamp(1rem,3vw,1.125rem)] font-semibold mb-2 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>v1.9</h4>
-                      <ul className="space-y-1 text-sm">
-                        <li><span className="added">➕ </span>Added daily totals dashboard</li>
-                        <li><span className="removed">➖ </span>Removed suggested change display from payment confirmation</li>
-                      </ul>
-                    </div>
-                    <div>
-                      <h4 className={`text-[clamp(1rem,3vw,1.125rem)] font-semibold mb-2 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>v1.8</h4>
-                      <ul className="space-y-1 text-sm">
-                        <li><span className="added">➕ </span>Added error boundary for runtime error handling</li>
-                        <li><span className="changed">🔄 </span>Updated to latest React 18 CDN</li>
-                      </ul>
-                    </div>
-                    <div>
-                      <h4 className={`text-[clamp(1rem,3vw,1.125rem)] font-semibold mb-2 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>v1.7</h4>
-                      <ul className="space-y-1 text-sm">
-                        <li><span className="added">➕ </span>Payment confirmation with change calculator</li>
-                        <li><span className="added">➕ </span>"Keep the Change" option</li>
-                        <li><span className="added">➕ </span>Actual payment tracking in history</li>
-                      </ul>
-                    </div>
-                    <div>
-                      <h4 className={`text-[clamp(1rem,3vw,1.125rem)] font-semibold mb-2 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>v1.0</h4>
-                      <ul className="space-y-1 text-sm">
-                        <li><span className="added">➕ </span>Initial release with core delivery tracking</li>
-                        <li><span className="added">➕ </span>Dark/light theme toggle</li>
-                        <li><span className="added">➕ </span>Grid/list view toggle</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-                <button
-                  onClick={toggleChangelogPopup}
-                  className={`changelog-close px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-600 shadow-md text-[clamp(0.875rem,3vw,1rem)]`}
-                >
-                  Close
-                </button>
-              </div>
-            )}
-
+  <div
+    className={`fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center ${isClosingChangelogPopup ? 'fade-out' : 'fade-in'}`}
+    onClick={toggleChangelogPopup}
+  >
+    <div
+      className={`p-6 rounded-lg w-[90vw] max-w-md shadow-lg ${isDarkMode ? 'bg-gray-800 text-gray-200' : 'bg-gray-200 text-gray-900'}`}
+      onClick={(e) => e.stopPropagation()}
+      style={{ maxHeight: '70vh', overflowY: 'auto' }}
+    >
+      <h3 className={`text-[clamp(1.25rem,4vw,1.5rem)] font-bold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Changelog</h3>
+      <div className="changelog-list">
+        <h4 className={`text-[clamp(1rem,3vw,1.125rem)] font-semibold mb-2 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>Version 1.3</h4>
+        <ul>
+          <li className="added">Added postcode validation for UK formats (e.g., S71 4RF) with real-time feedback</li>
+          <li className="added">Added export button to save delivery and history data as JSON</li>
+          <li className="fixed">Simplified popup navigation by consolidating modal states</li>
+          <li className="fixed">Improved daily totals display for clearer readability</li>
+          <li className="fixed">Fixed animation overlap when marking deliveries</li>
+        </ul>
+        <h4 className={`text-[clamp(1rem,3vw,1.125rem)] font-semibold mb-2 mt-4 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>Version 1.2</h4>
+        <ul>
+          <li className="added">Added undo option for marking deliveries or resetting the list (5-second window)</li>
+          <li className="added">Added toast notifications for actions like adding or marking deliveries</li>
+          <li className="added">Added keyboard support for number keypad</li>
+          <li className="fixed">Increased font sizes for better readability on small screens</li>
+          <li className="fixed">Fixed bug where invalid amounts could be entered</li>
+        </ul>
+        <h4 className={`text-[clamp(1rem,3vw,1.125rem)] font-semibold mb-2 mt-4 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>Version 1.1</h4>
+        <ul>
+          <li className="added">Added dark/light mode toggle with saved preference</li>
+          <li className="added">Added grid/list view toggle for delivery list</li>
+          <li className="added">Added help popups to explain app features</li>
+          <li className="fixed">Improved number keypad to allow direct input alongside buttons</li>
+          <li className="fixed">Fixed layout issues in grid view on mobile devices</li>
+        </ul>
+        <h4 className={`text-[clamp(1rem,3vw,1.125rem)] font-semibold mb-2 mt-4 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>Version 1.0</h4>
+        <ul>
+          <li className="added">Initial release with delivery tracking for postcodes and amounts</li>
+          <li className="added">Added payment status tracking (paid/not-paid) with change calculation</li>
+          <li className="added">Added daily totals for deliveries, amount due, and cash collected</li>
+          <li className="added">Added local storage to save delivery and history lists</li>
+          <li className="added">Added basic design with Tailwind CSS and React</li>
+        </ul>
+      </div>
+      <button
+        onClick={toggleChangelogPopup}
+        className={`changelog-close px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-600 shadow-md text-[clamp(0.875rem,3vw,1rem)]`}
+      >
+        Close
+      </button>
+    </div>
+  </div>
+)}
             {showToast && (
               <div className={`toast flex items-center space-x-4 fade-in`}>
                 <p className={`font-semibold text-[clamp(0.875rem,3vw,1rem)]`}>
