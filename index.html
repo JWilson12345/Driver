@@ -72,6 +72,7 @@
       padding: 1rem;
       border-radius: 0.5rem;
       box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      cursor: pointer;
     }
     .dark .delivery-grid > div {
       background-color: #2d3748;
@@ -101,16 +102,17 @@
     }
     .delivery-list > div {
       transition: transform 0.5s ease-out;
+      cursor: pointer;
     }
     .toast {
       position: fixed;
-      bottom: 1rem;
+      bottom: 10rem;
       left: 50%;
       transform: translateX(-50%);
       padding: 1rem;
       border-radius: 0.5rem;
       box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-      z-index: 100;
+      z-index: 50;
       max-width: 90vw;
     }
     .dark .toast {
@@ -139,12 +141,7 @@
     }
     .changelog-list .added {
       color: #10b981;
-    }
-    .changelog-list .removed {
-      color: #ef4444;
-    }
-    .changelog-list .changed {
-      color: #f59e0b;
+      list-style-type: "➕ ";
     }
     .changelog-close {
       position: fixed;
@@ -156,6 +153,7 @@
       display: flex;
       align-items: center;
       gap: 0.5rem;
+      width: 100%;
     }
     .keypad {
       display: grid;
@@ -191,28 +189,55 @@
       text-align: center;
       color: #ff0000;
     }
-    .totals-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-      gap: 1rem;
-      margin-bottom: 1.5rem;
-    }
-    .total-card {
-      padding: 1rem;
-      border-radius: 0.5rem;
-      text-align: center;
-    }
-    .dark .total-card {
-      background-color: #4a5568;
-    }
-    .light .total-card {
-      background-color: #e5e7eb;
-    }
   </style>
 </head>
 <body class="dark">
   <div id="root"></div>
-  <script type="text/babel">
+  <script type="text/babel">/* === APP: Fish & Chips Delivery Tracker (cleaned) === */
+
+/* === CHANGE BREAKDOWN HELPERS === */
+const denominations = [
+  { name: "£20 note", value: 2000 },
+  { name: "£10 note", value: 1000 },
+  { name: "£5 note", value: 500 },
+  { name: "£2 coin", value: 200 },
+  { name: "£1 coin", value: 100 },
+  { name: "50p coin", value: 50 },
+  { name: "20p coin", value: 20 },
+  { name: "10p coin", value: 10 },
+  { name: "5p coin", value: 5 },
+  { name: "2p coin", value: 2 },
+  { name: "1p coin", value: 1 },
+];
+
+const getChangeBreakdownObject = (amount) => {
+  let remaining = Math.round((parseFloat(amount) || 0) * 100);
+  const result = {};
+  for (const d of denominations) {
+    const count = Math.floor(remaining / d.value);
+    if (count > 0) {
+      result[d.name] = count;
+      remaining -= count * d.value;
+    }
+  }
+  return result;
+};
+
+const combineBreakdowns = (deliveries) => {
+  const totals = {};
+  deliveries
+    .filter((d) => d.paymentStatus === "not-paid")
+    .forEach((d) => {
+      const breakdown = getChangeBreakdownObject(d.changeDue);
+      for (const [name, count] of Object.entries(breakdown)) {
+        totals[name] = (totals[name] || 0) + count;
+      }
+    });
+  return totals;
+};
+
+
+
     // Error Boundary Component
     class ErrorBoundary extends React.Component {
       state = { hasError: false, error: null };
@@ -289,11 +314,21 @@
       const [showPaymentPopup, setShowPaymentPopup] = React.useState(false);
       const [showHistoryPopup, setShowHistoryPopup] = React.useState(false);
       const [showChangeConfirmationPopup, setShowChangeConfirmationPopup] = React.useState(false);
+      const [showQuickCalculatorPopup, setShowQuickCalculatorPopup] = React.useState(false);
+      const [showHistoryEditPopup, setShowHistoryEditPopup] = React.useState(null);
+      const [showHistoryDeleteConfirm, setShowHistoryDeleteConfirm] = React.useState(null);
       const [postcode, setPostcode] = React.useState('');
       const [amountDue, setAmountDue] = React.useState('');
+      const [details, setDetails] = React.useState('');
       const [customerPaidAmount, setCustomerPaidAmount] = React.useState('');
+      const [quickCalcAmount, setQuickCalcAmount] = React.useState('');
       const [paymentStatus, setPaymentStatus] = React.useState('paid');
       const [showResetConfirm, setShowResetConfirm] = React.useState(false);
+      const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(null);
+
+  // Change summary popup state
+  const [showChangeSummary, setShowChangeSummary] = React.useState(false);
+      const [showEditPopup, setShowEditPopup] = React.useState(null);
       const [showDeliveryInfo, setShowDeliveryInfo] = React.useState(null);
       const [showChangelogPopup, setShowChangelogPopup] = React.useState(false);
       const [fadingItemIndex, setFadingItemIndex] = React.useState(null);
@@ -301,10 +336,15 @@
       const [isClosingDeliveryPopup, setIsClosingDeliveryPopup] = React.useState(false);
       const [isClosingPaymentPopup, setIsClosingPaymentPopup] = React.useState(false);
       const [isClosingResetPopup, setIsClosingResetPopup] = React.useState(false);
+      const [isClosingDeletePopup, setIsClosingDeletePopup] = React.useState(false);
+      const [isClosingEditPopup, setIsClosingEditPopup] = React.useState(false);
       const [isClosingDeliveryInfo, setIsClosingDeliveryInfo] = React.useState(false);
       const [isClosingChangelogPopup, setIsClosingChangelogPopup] = React.useState(false);
       const [isClosingHistoryPopup, setIsClosingHistoryPopup] = React.useState(false);
       const [isClosingChangeConfirmationPopup, setIsClosingChangeConfirmationPopup] = React.useState(false);
+      const [isClosingQuickCalculatorPopup, setIsClosingQuickCalculatorPopup] = React.useState(false);
+      const [isClosingHistoryEditPopup, setIsClosingHistoryEditPopup] = React.useState(false);
+      const [isClosingHistoryDeletePopup, setIsClosingHistoryDeletePopup] = React.useState(false);
       const [isGridView, setIsGridView] = React.useState(false);
       const [isDarkMode, setIsDarkMode] = React.useState(() => {
         try {
@@ -317,6 +357,7 @@
       });
       const [showToast, setShowToast] = React.useState(false);
       const [lastAction, setLastAction] = React.useState(null);
+      const [searchQuery, setSearchQuery] = React.useState('');
 
       React.useEffect(() => {
         try {
@@ -380,7 +421,6 @@
           if (isNaN(date.getTime())) throw new Error('Invalid timestamp');
           const day = date.getDate();
           const month = date.getMonth() + 1;
-          const year = date.getFullYear();
           const hours = date.getHours();
           const minutes = date.getMinutes();
           const ampm = hours >= 12 ? 'pm' : 'am';
@@ -392,12 +432,13 @@
           const formattedTime = `${hours12}:${minutes.toString().padStart(2, '0')}${ampm}`;
           
           return {
+            date: formattedDay,
             day: formattedDay,
             time: formattedTime
           };
         } catch (e) {
           console.error('Error formatting timestamp:', e);
-          return { day: '', time: '' };
+          return { date: '', day: '', time: '' };
         }
       };
 
@@ -411,19 +452,7 @@
       const calculateCustomerChange = (amountDue, paid) => {
         const due = parseFloat(amountDue) || 0;
         const paidAmount = parseFloat(paid) || 0;
-        return paidAmount >= due ? (paidAmount - due).toFixed(2) : '0.00';
-      };
-
-      const getDailyTotals = () => {
-        const totalDeliveries = deliveryList.length;
-        const totalDue = deliveryList.reduce((sum, delivery) => sum + (delivery.amountDue || 0), 0);
-        const cashCollected = historyList.reduce((sum, delivery) => {
-          if (delivery.actualPaidAmount) {
-            return sum + parseFloat(delivery.actualPaidAmount);
-          }
-          return sum;
-        }, 0);
-        return { totalDeliveries, totalDue: totalDue.toFixed(2), cashCollected: cashCollected.toFixed(2) };
+        return paidAmount >= due ? (paidAmount - due).toFixed(2) : 0;
       };
 
       const handlePostcodeChange = (e) => {
@@ -446,6 +475,7 @@
           paymentStatus,
           amountDue: paymentStatus === 'not-paid' ? parseFloat(amountDue) || 0 : 0,
           changeDue: paymentStatus === 'not-paid' ? calculateChange(amountDue) : 0,
+          details: details.trim(),
           timestamp: new Date().toISOString(),
         };
         setDeliveryList([delivery, ...deliveryList]);
@@ -458,6 +488,7 @@
           setIsClosingPaymentPopup(false);
           setPostcode('');
           setAmountDue('');
+          setDetails('');
           setPaymentStatus('paid');
         }, 300);
       };
@@ -473,6 +504,7 @@
           paymentStatus: 'paid',
           amountDue: 0,
           changeDue: 0,
+          details: details.trim(),
           timestamp: new Date().toISOString(),
         };
         setDeliveryList([delivery, ...deliveryList]);
@@ -483,7 +515,104 @@
           setShowDeliveryPopup(false);
           setIsClosingDeliveryPopup(false);
           setPostcode('');
+          setDetails('');
           setPaymentStatus('paid');
+        }, 300);
+      };
+
+      const editDelivery = (index) => {
+        if (!postcode.trim()) {
+          setShowToast(true);
+          setLastAction({ type: 'error', data: 'Postcode cannot be empty.' });
+          return;
+        }
+        if (paymentStatus === 'not-paid' && (!amountDue || parseFloat(amountDue) <= 0)) {
+          setShowToast(true);
+          setLastAction({ type: 'error', data: 'Amount due must be greater than £0.' });
+          return;
+        }
+        const updatedDelivery = {
+          postcode,
+          paymentStatus,
+          amountDue: paymentStatus === 'not-paid' ? parseFloat(amountDue) || 0 : 0,
+          changeDue: paymentStatus === 'not-paid' ? calculateChange(amountDue) : 0,
+          details: details.trim(),
+          timestamp: deliveryList[index].timestamp,
+        };
+        const updatedList = [...deliveryList];
+        updatedList[index] = updatedDelivery;
+        setDeliveryList(updatedList);
+        setLastAction({ type: 'edit', data: { ...updatedDelivery, index } });
+        setShowToast(true);
+        setIsClosingEditPopup(true);
+        setTimeout(() => {
+          setShowEditPopup(null);
+          setIsClosingEditPopup(false);
+          setPostcode('');
+          setAmountDue('');
+          setDetails('');
+          setPaymentStatus('paid');
+        }, 300);
+      };
+
+      const editHistoryDelivery = (index) => {
+        if (!postcode.trim()) {
+          setShowToast(true);
+          setLastAction({ type: 'error', data: 'Postcode cannot be empty.' });
+          return;
+        }
+        if (paymentStatus === 'not-paid' && (!amountDue || parseFloat(amountDue) <= 0)) {
+          setShowToast(true);
+          setLastAction({ type: 'error', data: 'Amount due must be greater than £0.' });
+          return;
+        }
+        const updatedDelivery = {
+          postcode,
+          paymentStatus,
+          amountDue: paymentStatus === 'not-paid' ? parseFloat(amountDue) || 0 : 0,
+          changeDue: paymentStatus === 'not-paid' ? calculateChange(amountDue) : 0,
+          details: details.trim(),
+          timestamp: historyList[index].timestamp,
+        };
+        const updatedList = [...historyList];
+        updatedList[index] = updatedDelivery;
+        setHistoryList(updatedList);
+        setLastAction({ type: 'editHistory', data: { ...updatedDelivery, index } });
+        setShowToast(true);
+        setIsClosingHistoryEditPopup(true);
+        setTimeout(() => {
+          setShowHistoryEditPopup(null);
+          setIsClosingHistoryEditPopup(false);
+          setPostcode('');
+          setAmountDue('');
+          setDetails('');
+          setPaymentStatus('paid');
+        }, 300);
+      };
+
+      const deleteDelivery = (index) => {
+        const item = deliveryList[index];
+        const updatedList = deliveryList.filter((_, i) => i !== index);
+        setDeliveryList(updatedList);
+        setLastAction({ type: 'delete', data: { ...item, index } });
+        setShowToast(true);
+        setIsClosingDeletePopup(true);
+        setTimeout(() => {
+          setShowDeleteConfirm(null);
+          setIsClosingDeletePopup(false);
+        }, 300);
+      };
+
+      const deleteHistoryDelivery = (index) => {
+        const item = historyList[index];
+        const updatedList = historyList.filter((_, i) => i !== index);
+        setHistoryList(updatedList);
+        setLastAction({ type: 'deleteHistory', data: { ...item, index } });
+        setShowToast(true);
+        setIsClosingHistoryDeletePopup(true);
+        setTimeout(() => {
+          setShowHistoryDeleteConfirm(null);
+          setIsClosingHistoryDeletePopup(false);
         }, 300);
       };
 
@@ -496,10 +625,10 @@
         if (delivery.paymentStatus === 'not-paid') {
           setShowChangeConfirmationPopup(true);
         } else {
-          const completedDelivery = { ...delivery, actualPaidAmount: delivery.amountDue || 0 };
           setFadingItemIndex(index);
-          setHistoryList([completedDelivery, ...historyList]);
-          setLastAction({ type: 'deliver', data: { ...completedDelivery, index } });
+          const item = deliveryList[index];
+          setHistoryList([item, ...historyList]);
+          setLastAction({ type: 'deliver', data: { ...item, index } });
           setShowToast(true);
           const itemsToSlide = isGridView ? [] : deliveryList.filter((_, i) => i > index).map((_, i) => index + i + 1);
           setSlidingItems(itemsToSlide);
@@ -529,16 +658,10 @@
           setLastAction({ type: 'error', data: 'Customer payment must be at least the amount due.' });
           return;
         }
-        const actualChange = (paidAmount - delivery.amountDue).toFixed(2);
-        const completedDelivery = {
-          ...delivery,
-          actualPaidAmount: paidAmount,
-          actualChange: parseFloat(actualChange),
-          transactionType: 'confirmed'
-        };
         setFadingItemIndex(index);
-        setHistoryList([completedDelivery, ...historyList]);
-        setLastAction({ type: 'deliver', data: { ...completedDelivery, index } });
+        const item = deliveryList[index];
+        setHistoryList([item, ...historyList]);
+        setLastAction({ type: 'deliver', data: { ...item, index } });
         setShowToast(true);
         const itemsToSlide = isGridView ? [] : deliveryList.filter((_, i) => i > index).map((_, i) => index + i + 1);
         setSlidingItems(itemsToSlide);
@@ -563,16 +686,10 @@
           console.error('Invalid delivery index:', index);
           return;
         }
-        const delivery = deliveryList[index];
-        const completedDelivery = {
-          ...delivery,
-          actualPaidAmount: delivery.amountDue + parseFloat(delivery.changeDue),
-          actualChange: 0,
-          transactionType: 'keep-the-change'
-        };
         setFadingItemIndex(index);
-        setHistoryList([completedDelivery, ...historyList]);
-        setLastAction({ type: 'deliver', data: { ...completedDelivery, index } });
+        const item = deliveryList[index];
+        setHistoryList([item, ...historyList]);
+        setLastAction({ type: 'deliver', data: { ...item, index } });
         setShowToast(true);
         const itemsToSlide = isGridView ? [] : deliveryList.filter((_, i) => i > index).map((_, i) => index + i + 1);
         setSlidingItems(itemsToSlide);
@@ -614,6 +731,26 @@
           updatedList.splice(data.index, 0, data);
           setDeliveryList(updatedList);
           setHistoryList(historyList.slice(1));
+        } else if (lastAction.type === 'delete') {
+          const { data } = lastAction;
+          const updatedList = [...deliveryList];
+          updatedList.splice(data.index, 0, data);
+          setDeliveryList(updatedList);
+        } else if (lastAction.type === 'deleteHistory') {
+          const { data } = lastAction;
+          const updatedList = [...historyList];
+          updatedList.splice(data.index, 0, data);
+          setHistoryList(updatedList);
+        } else if (lastAction.type === 'edit') {
+          const { data } = lastAction;
+          const updatedList = [...deliveryList];
+          updatedList[data.index] = data;
+          setDeliveryList(updatedList);
+        } else if (lastAction.type === 'editHistory') {
+          const { data } = lastAction;
+          const updatedList = [...historyList];
+          updatedList[data.index] = data;
+          setHistoryList(updatedList);
         } else if (lastAction.type === 'reset') {
           setDeliveryList(lastAction.data.deliveryList);
           setHistoryList(lastAction.data.historyList);
@@ -654,20 +791,28 @@
         }
       };
 
-      const { totalDeliveries, totalDue, cashCollected } = getDailyTotals();
-
-      const formatHistoryPayment = (delivery) => {
-        if (delivery.paymentStatus === 'paid') {
-          return 'Paid';
-        }
-        if (delivery.transactionType === 'keep-the-change') {
-          return `Keep the Change (Paid £${delivery.actualPaidAmount?.toFixed(2)})`; 
-        }
-        if (delivery.actualChange !== undefined) {
-          return `Paid £${delivery.actualPaidAmount?.toFixed(2)} (Change: £${delivery.actualChange.toFixed(2)})`;
-        }
-        return `£${delivery.amountDue.toFixed(2)}`;
+      const openEditPopup = (index) => {
+        const delivery = deliveryList[index];
+        setPostcode(delivery.postcode);
+        setPaymentStatus(delivery.paymentStatus);
+        setAmountDue(delivery.amountDue.toString());
+        setDetails(delivery.details || '');
+        setShowEditPopup(index);
       };
+
+      const openHistoryEditPopup = (index) => {
+        const delivery = historyList[index];
+        setPostcode(delivery.postcode);
+        setPaymentStatus(delivery.paymentStatus);
+        setAmountDue(delivery.amountDue.toString());
+        setDetails(delivery.details || '');
+        setShowHistoryEditPopup(index);
+      };
+
+      const filteredDeliveryList = deliveryList.filter(delivery => 
+        delivery.postcode.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (delivery.paymentStatus === 'not-paid' && delivery.amountDue.toString().includes(searchQuery))
+      );
 
       return (
         <ErrorBoundary>
@@ -685,6 +830,7 @@
                   >
                     <i className={`fas ${isGridView ? 'fa-bars' : 'fa-th'}`}></i>
                   </button>
+				  
                   <button
                     onClick={toggleTheme}
                     className="w-10 h-10 rounded-full bg-blue-700 text-white flex items-center justify-center text-lg font-semibold hover:bg-blue-600 scale-transition"
@@ -692,6 +838,7 @@
                   >
                     <i className={`fas ${isDarkMode ? 'fa-moon' : 'fa-sun'}`}></i>
                   </button>
+				  
                 </div>
               </div>
               <div className="flex space-x-2">
@@ -708,46 +855,74 @@
                 >
                   Delivery History
                 </button>
+				
+                <button
+                  onClick={() => setShowQuickCalculatorPopup(true)}
+                  className={`flex-1 py-2 rounded-lg font-semibold text-white shadow-md hover:bg-yellow-600 ${isDarkMode ? 'bg-yellow-700' : 'bg-yellow-600'}`}
+                  aria-label="Quick Change Calculator"
+                >
+                  Change Calc
+                </button>
+				
               </div>
             </header>
 
             <main className="content">
               <div className="w-full max-w-[90vw] mx-auto">
                 <div className="flex justify-between items-center mb-4">
-                  <h2 className={`text-[clamp(1.25rem,4vw,1.5rem)] font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                    Today's Deliveries
-                  </h2>
-                  <button
-                    onClick={() => setShowResetConfirm(true)}
-                    className="px-4 py-2 bg-red-700 text-white rounded-lg shadow-md hover:bg-red-600 text-[clamp(0.875rem,3vw,1rem)]"
-                  >
-                    Reset Day
-                  </button>
-                </div>
+  <h2
+    className={`text-[clamp(1.25rem,4vw,1.5rem)] font-semibold ${
+      isDarkMode ? 'text-white' : 'text-gray-900'
+    }`}
+  >
+    Today's Deliveries
+  </h2>
+  <div className="flex space-x-2">
+    {/* 🪙 Total Change Button */}
+    <button
+      onClick={() => setShowChangeSummary(true)}
+      className="px-4 py-2 bg-purple-700 text-white rounded-lg shadow-md hover:bg-purple-600 text-[clamp(0.875rem,3vw,1rem)]"
+    >
+      Total Change
+    </button>
 
-                <div className="totals-grid">
-                  <div className={`total-card ${isDarkMode ? 'text-gray-200' : 'text-gray-900'}`}>
-                    <div className="text-2xl font-bold">{totalDeliveries}</div>
-                    <div className="text-sm opacity-75">Total Deliveries</div>
-                  </div>
-                  <div className={`total-card ${isDarkMode ? 'text-gray-200' : 'text-gray-900'}`}>
-                    <div className="text-2xl font-bold">£{totalDue}</div>
-                    <div className="text-sm opacity-75">Total Due</div>
-                  </div>
-                  <div className={`total-card ${isDarkMode ? 'text-gray-200' : 'text-gray-900'}`}>
-                    <div className="text-2xl font-bold">£{cashCollected}</div>
-                    <div className="text-sm opacity-75">Cash Collected</div>
-                  </div>
-                </div>
+    {/* 🔁 Reset Day Button */}
+    <button
+      onClick={() => setShowResetConfirm(true)}
+      className="px-4 py-2 bg-red-700 text-white rounded-lg shadow-md hover:bg-red-600 text-[clamp(0.875rem,3vw,1rem)]"
+    >
+      Reset Day
+    </button>
+  </div>
+</div>
+
 
                 <p className={`text-[clamp(1rem,4vw,1.125rem)] font-semibold mb-4 ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-                  Pending: {deliveryList.length}
+                  Total Deliveries: {deliveryList.length}
                 </p>
-                {deliveryList.length === 0 ? (
-                  <p className={`text-center ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>No deliveries today.</p>
+                <div className="relative mb-4">
+                  <input
+                    type="text"
+                    placeholder="Search by postcode or amount..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className={`w-full p-2 border rounded-lg ${isDarkMode ? 'bg-gray-700 text-white placeholder-gray-400 border-gray-600' : 'bg-gray-200 text-gray-900 placeholder-gray-500 border-gray-300'}`}
+                    aria-label="Search deliveries"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <i className="fas fa-times"></i>
+                    </button>
+                  )}
+                </div>
+                {filteredDeliveryList.length === 0 ? (
+                  <p className={`text-center ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>No deliveries found.</p>
                 ) : (
                   <div className={isGridView ? 'delivery-grid' : 'space-y-3'}>
-                    {deliveryList.map((delivery, index) => (
+                    {filteredDeliveryList.map((delivery, index) => (
                       <div
                         key={index}
                         className={`flex ${isGridView ? '' : 'items-center justify-between p-3 rounded-lg shadow-md'} ${
@@ -760,12 +935,39 @@
                             {delivery.postcode} | {delivery.paymentStatus === 'paid' ? 'Paid' : `£${delivery.amountDue.toFixed(2)}`}
                           </span>
                         </div>
+                        {!isGridView && (
+                          <div className="flex space-x-2" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={() => openEditPopup(index)}
+                              className="text-blue-500 hover:text-blue-700"
+                              aria-label="Edit delivery"
+                            >
+                              <i className="fas fa-edit"></i>
+                            </button>
+                            <button
+                              onClick={() => setShowDeleteConfirm(index)}
+                              className="text-red-500 hover:text-red-700"
+                              aria-label="Delete delivery"
+                            >
+                              <i className="fas fa-trash"></i>
+                            </button>
+                          </div>
+                        )}
                         {isGridView && (
-                          <button
-                            className="mt-2 px-3 py-1.5 bg-blue-700 text-white rounded-lg shadow-md hover:bg-blue-600 text-[clamp(0.75rem,3vw,0.875rem)]"
-                          >
-                            View
-                          </button>
+                          <div className="flex space-x-2 mt-2" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={() => openEditPopup(index)}
+                              className="px-3 py-1.5 bg-yellow-700 text-white rounded-lg shadow-md hover:bg-yellow-600 text-[clamp(0.75rem,3vw,0.875rem)]"
+                            >
+                              <i className="fas fa-edit"></i>
+                            </button>
+                            <button
+                              onClick={() => setShowDeleteConfirm(index)}
+                              className="px-3 py-1.5 bg-red-700 text-white rounded-lg shadow-md hover:bg-red-600 text-[clamp(0.75rem,3vw,0.875rem)]"
+                            >
+                              <i className="fas fa-trash"></i>
+                            </button>
+                          </div>
                         )}
                       </div>
                     ))}
@@ -784,15 +986,19 @@
               <span className={isDarkMode ? 'text-gray-200' : 'text-gray-600'}>V2.0</span>
             </div>
 
+            {/* === POPUP: Add Delivery === */}
+
+
             {showDeliveryPopup && (
               <div
-                className={`fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center ${isClosingDeliveryPopup ? 'fade-out' : 'fade-in'}`}
+                className={`fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[100]`}
                 onClick={() => {
                   setIsClosingDeliveryPopup(true);
                   setTimeout(() => {
                     setShowDeliveryPopup(false);
                     setIsClosingDeliveryPopup(false);
                     setPostcode('');
+                    setDetails('');
                     setPaymentStatus('paid');
                   }, 300);
                 }}
@@ -811,6 +1017,14 @@
                     onChange={handlePostcodeChange}
                     className={`w-full p-2 border rounded-lg mb-4 ${isDarkMode ? 'bg-gray-700 text-white placeholder-gray-400 border-gray-600' : 'bg-gray-200 text-gray-900 placeholder-gray-500 border-gray-300'}`}
                     aria-label="Postcode"
+                  />
+                  <textarea
+                    placeholder="Additional details (optional)"
+                    value={details}
+                    onChange={(e) => setDetails(e.target.value)}
+                    className={`w-full p-2 border rounded-lg mb-4 ${isDarkMode ? 'bg-gray-700 text-white placeholder-gray-400 border-gray-600' : 'bg-gray-200 text-gray-900 placeholder-gray-500 border-gray-300'}`}
+                    aria-label="Additional details"
+                    rows="3"
                   />
                   <div className="flex justify-between mb-4">
                     <button
@@ -837,6 +1051,7 @@
                           setShowDeliveryPopup(false);
                           setIsClosingDeliveryPopup(false);
                           setPostcode('');
+                          setDetails('');
                           setPaymentStatus('paid');
                         }, 300);
                       }}
@@ -849,9 +1064,12 @@
               </div>
             )}
 
+            {/* === POPUP: Enter Amount Due === */}
+
+
             {showPaymentPopup && (
               <div
-                className={`fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center ${isClosingPaymentPopup ? 'fade-out' : 'fade-in'}`}
+                className={`fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[100]`}
                 onClick={() => {
                   setIsClosingPaymentPopup(true);
                   setTimeout(() => {
@@ -872,7 +1090,7 @@
                     type="text"
                     readOnly
                     value={amountDue}
-                    placeholder="Amount due (£)"
+                    placeholder=" Amount due (£)"
                     className={`w-full p-2 border rounded-lg mb-4 ${isDarkMode ? 'bg-gray-700 text-white placeholder-gray-400 border-gray-600' : 'bg-gray-200 text-gray-900 placeholder-gray-500 border-gray-300'}`}
                     aria-label="Amount due"
                   />
@@ -902,9 +1120,241 @@
               </div>
             )}
 
+            {/* === POPUP: Edit Delivery === */}
+
+
+            {showEditPopup !== null && (
+              <div
+                className={`fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[100]`}
+                onClick={() => {
+                  setIsClosingEditPopup(true);
+                  setTimeout(() => {
+                    setShowEditPopup(null);
+                    setIsClosingEditPopup(false);
+                    setPostcode('');
+                    setAmountDue('');
+                    setDetails('');
+                    setPaymentStatus('paid');
+                  }, 300);
+                }}
+              >
+                <div
+                  className={`p-6 rounded-lg w-[90vw] max-w-md shadow-lg ${isDarkMode ? 'bg-gray-800' : 'bg-gray-200'}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <h2 className={`text-[clamp(1.25rem,4vw,1.5rem)] font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                    Edit Delivery
+                  </h2>
+                  <input
+                    type="text"
+                    placeholder="Enter postcode (e.g., S714RF)"
+                    value={postcode}
+                    onChange={handlePostcodeChange}
+                    className={`w-full p-2 border rounded-lg mb-4 ${isDarkMode ? 'bg-gray-700 text-white placeholder-gray-400 border-gray-600' : 'bg-gray-200 text-gray-900 placeholder-gray-500 border-gray-300'}`}
+                    aria-label="Postcode"
+                  />
+                  <textarea
+                    placeholder="Additional details (optional)"
+                    value={details}
+                    onChange={(e) => setDetails(e.target.value)}
+                    className={`w-full p-2 border rounded-lg mb-4 ${isDarkMode ? 'bg-gray-700 text-white placeholder-gray-400 border-gray-600' : 'bg-gray-200 text-gray-900 placeholder-gray-500 border-gray-300'}`}
+                    aria-label="Additional details"
+                    rows="3"
+                  />
+                  <div className="flex justify-between mb-4">
+                    <button
+                      onClick={() => {
+                        setPaymentStatus('paid');
+                      }}
+                      className={`flex-1 py-2 rounded-lg font-semibold text-white shadow-md hover:bg-green-600 ${paymentStatus === 'paid' ? (isDarkMode ? 'bg-green-700' : 'bg-green-600') : (isDarkMode ? 'bg-gray-700' : 'bg-gray-400')}`}
+                    >
+                      Paid
+                    </button>
+                    <button
+                      onClick={() => setPaymentStatus('not-paid')}
+                      className={`flex-1 py-2 rounded-lg font-semibold text-white shadow-md hover:bg-red-600 ${paymentStatus === 'not-paid' ? (isDarkMode ? 'bg-red-700' : 'bg-red-600') : (isDarkMode ? 'bg-gray-700' : 'bg-gray-400')}`}
+                    >
+                      Not Paid
+                    </button>
+                  </div>
+                  {paymentStatus === 'not-paid' && (
+                    <>
+                      <input
+                        type="text"
+                        readOnly
+                        value={amountDue}
+                        placeholder="Amount due (£)"
+                        className={`w-full p-2 border rounded-lg mb-4 ${isDarkMode ? 'bg-gray-700 text-white placeholder-gray-400 border-gray-600' : 'bg-gray-200 text-gray-900 placeholder-gray-500 border-gray-300'}`}
+                        aria-label="Amount due"
+                      />
+                      <NumberKeypad value={amountDue} onChange={setAmountDue} />
+                    </>
+                  )}
+                  <div className="flex justify-end space-x-2 mt-4">
+                    <button
+                      onClick={() => {
+                        setIsClosingEditPopup(true);
+                        setTimeout(() => {
+                          setShowEditPopup(null);
+                          setIsClosingEditPopup(false);
+                          setPostcode('');
+                          setAmountDue('');
+                          setDetails('');
+                          setPaymentStatus('paid');
+                        }, 300);
+                      }}
+                      className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-400 shadow-md text-[clamp(0.875rem,3vw,1rem)]"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => editDelivery(showEditPopup)}
+                      className="px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-600 shadow-md text-[clamp(0.875rem,3vw,1rem)]"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* === POPUP: Edit History Entry === */}
+
+
+            {showHistoryEditPopup !== null && (
+  <div
+    className={`fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[100]`}
+    onClick={() => {
+      setIsClosingHistoryEditPopup(true);
+      setTimeout(() => {
+        setShowHistoryEditPopup(null);
+        setIsClosingHistoryEditPopup(false);
+        setPostcode('');
+        setAmountDue('');
+        setDetails('');
+        setPaymentStatus('paid');
+      }, 300);
+    }}
+  >
+    <div
+      className={`p-6 rounded-lg w-[90vw] max-w-md shadow-lg ${isDarkMode ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-900'}`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <h2 className="text-xl font-bold mb-4 text-center">Edit History Entry</h2>
+
+      <div className="space-y-4">
+        <div>
+          <label className="block mb-1 text-sm font-medium">Postcode</label>
+          <input
+            type="text"
+            value={postcode}
+            onChange={handlePostcodeChange}
+            className={`w-full p-2 border rounded-lg ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'}`}
+            placeholder="e.g. S714RF"
+          />
+        </div>
+
+        <div>
+          <label className="block mb-1 text-sm font-medium">Details</label>
+          <textarea
+            value={details}
+            onChange={(e) => setDetails(e.target.value)}
+            rows="3"
+            className={`w-full p-2 border rounded-lg ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'}`}
+            placeholder="Additional notes..."
+          />
+        </div>
+
+        <div>
+          <label className="block mb-2 text-sm font-medium">Payment Status</label>
+          <div className="flex space-x-2">
+            <button
+              onClick={() => {
+                setPaymentStatus('paid');
+              }}
+              className={`flex-1 py-2 rounded-lg font-semibold shadow-md ${
+                paymentStatus === 'paid'
+                  ? isDarkMode
+                    ? 'bg-green-700 text-white'
+                    : 'bg-green-600 text-white'
+                  : isDarkMode
+                    ? 'bg-gray-700 text-gray-300'
+                    : 'bg-gray-300 text-gray-700'
+              }`}
+            >
+              Paid
+            </button>
+            <button
+              onClick={() => setPaymentStatus('not-paid')}
+              className={`flex-1 py-2 rounded-lg font-semibold shadow-md ${
+                paymentStatus === 'not-paid'
+                  ? isDarkMode
+                    ? 'bg-red-700 text-white'
+                    : 'bg-red-600 text-white'
+                  : isDarkMode
+                    ? 'bg-gray-700 text-gray-300'
+                    : 'bg-gray-300 text-gray-700'
+              }`}
+            >
+              Not Paid
+            </button>
+          </div>
+        </div>
+
+        {paymentStatus === 'not-paid' && (
+          <div>
+            <label className="block mb-1 text-sm font-medium">Amount Due (£)</label>
+            <input
+              type="text"
+              readOnly
+              value={amountDue}
+              className={`w-full p-2 border rounded-lg mb-2 ${
+                isDarkMode
+                  ? 'bg-gray-700 border-gray-600 text-white'
+                  : 'bg-gray-100 border-gray-300 text-gray-900'
+              }`}
+            />
+            <NumberKeypad value={amountDue} onChange={setAmountDue} />
+          </div>
+        )}
+      </div>
+
+      <div className="flex justify-end space-x-2 mt-6">
+        <button
+          onClick={() => {
+            setIsClosingHistoryEditPopup(true);
+            setTimeout(() => {
+              setShowHistoryEditPopup(null);
+              setIsClosingHistoryEditPopup(false);
+              setPostcode('');
+              setAmountDue('');
+              setDetails('');
+              setPaymentStatus('paid');
+            }, 300);
+          }}
+          className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-400 shadow-md"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={() => editHistoryDelivery(showHistoryEditPopup)}
+          className="px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-600 shadow-md"
+        >
+          Save
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+
+            {/* === CONFIRM: Reset Day === */}
+
+
+
             {showResetConfirm && (
               <div
-                className={`fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center ${isClosingResetPopup ? 'fade-out' : 'fade-in'}`}
+                className={`fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[100]`}
                 onClick={() => {
                   setIsClosingResetPopup(true);
                   setTimeout(() => {
@@ -944,14 +1394,17 @@
               </div>
             )}
 
-            {showDeliveryInfo !== null && deliveryList[showDeliveryInfo] && (
+            {/* === CONFIRM: Delete Delivery === */}
+
+
+            {showDeleteConfirm !== null && (
               <div
-                className={`fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center ${isClosingDeliveryInfo ? 'fade-out' : 'fade-in'}`}
+                className={`fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[100]`}
                 onClick={() => {
-                  setIsClosingDeliveryInfo(true);
+                  setIsClosingDeletePopup(true);
                   setTimeout(() => {
-                    setShowDeliveryInfo(null);
-                    setIsClosingDeliveryInfo(false);
+                    setShowDeleteConfirm(null);
+                    setIsClosingDeletePopup(false);
                   }, 300);
                 }}
               >
@@ -959,50 +1412,201 @@
                   className={`p-6 rounded-lg w-[90vw] max-w-md shadow-lg ${isDarkMode ? 'bg-gray-800' : 'bg-gray-200'}`}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <h2 className={`text-[clamp(1.25rem,4vw,1.5rem)] font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                    Delivery Details
-                  </h2>
-                  <p className={`mb-2 text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
-                    {deliveryList[showDeliveryInfo].postcode} | {deliveryList[showDeliveryInfo].paymentStatus === 'paid' ? 'Paid' : `£${deliveryList[showDeliveryInfo].amountDue.toFixed(2)}`}
-                  </p>
-                  {deliveryList[showDeliveryInfo].paymentStatus === 'not-paid' && (
-                    <p className={`mb-2 text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
-                      Change: £{deliveryList[showDeliveryInfo].changeDue}
-                    </p>
-                  )}
-                  <p className={`mb-2 text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
-                    <strong>Day:</strong> {formatTimestamp(deliveryList[showDeliveryInfo].timestamp).day}
-                  </p>
                   <p className={`mb-4 text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
-                    <strong>Time:</strong> {formatTimestamp(deliveryList[showDeliveryInfo].timestamp).time}
+                    Are you sure you want to delete this delivery?
                   </p>
                   <div className="flex justify-end space-x-2">
                     <button
                       onClick={() => {
-                        setIsClosingDeliveryInfo(true);
+                        setIsClosingDeletePopup(true);
                         setTimeout(() => {
-                          setShowDeliveryInfo(null);
-                          setIsClosingDeliveryInfo(false);
+                          setShowDeleteConfirm(null);
+                          setIsClosingDeletePopup(false);
                         }, 300);
                       }}
                       className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-400 shadow-md text-[clamp(0.875rem,3vw,1rem)]"
                     >
-                      Close
+                      Cancel
                     </button>
                     <button
-                      onClick={() => markDelivered(showDeliveryInfo)}
-                      className="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-600 shadow-md text-[clamp(0.875rem,3vw,1rem)]"
+                      onClick={() => deleteDelivery(showDeleteConfirm)}
+                      className="px-4 py-2 bg-red-700 text-white rounded-lg hover:bg-red-600 shadow-md text-[clamp(0.875rem,3vw,1rem)]"
                     >
-                      Mark Delivered
+                      Delete
                     </button>
                   </div>
                 </div>
               </div>
             )}
 
+            {/* === CONFIRM: Delete History Entry === */}
+
+
+            {showHistoryDeleteConfirm !== null && (
+              <div
+                className={`fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[100]`}
+                onClick={() => {
+                  setIsClosingHistoryDeletePopup(true);
+                  setTimeout(() => {
+                    setShowHistoryDeleteConfirm(null);
+                    setIsClosingHistoryDeletePopup(false);
+                  }, 300);
+                }}
+              >
+                <div
+                  className={`p-6 rounded-lg w-[90vw] max-w-md shadow-lg ${isDarkMode ? 'bg-gray-800' : 'bg-gray-200'}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <p className={`mb-4 text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
+                    Are you sure you want to delete this history entry?
+                  </p>
+                  <div className="flex justify-end space-x-2">
+                    <button
+                      onClick={() => {
+                        setIsClosingHistoryDeletePopup(true);
+                        setTimeout(() => {
+                          setShowHistoryDeleteConfirm(null);
+                          setIsClosingHistoryDeletePopup(false);
+                        }, 300);
+                      }}
+                      className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-400 shadow-md text-[clamp(0.875rem,3vw,1rem)]"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => deleteHistoryDelivery(showHistoryDeleteConfirm)}
+                      className="px-4 py-2 bg-red-700 text-white rounded-lg hover:bg-red-600 shadow-md text-[clamp(0.875rem,3vw,1rem)]"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* === POPUP: Delivery Details === */}
+
+
+            {showDeliveryInfo !== null && deliveryList[showDeliveryInfo] && (
+  <div
+    className={`fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[100]`}
+    onClick={() => {
+      setIsClosingDeliveryInfo(true);
+      setTimeout(() => {
+        setShowDeliveryInfo(null);
+        setIsClosingDeliveryInfo(false);
+      }, 300);
+    }}
+  >
+    <div
+      className={`p-6 rounded-lg w-[90vw] max-w-md shadow-lg ${isDarkMode ? 'bg-gray-800' : 'bg-gray-200'}`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <h2 className={`text-[clamp(1.25rem,4vw,1.5rem)] font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+        Delivery Details
+      </h2>
+      <p className={`mb-2 text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
+        {deliveryList[showDeliveryInfo].postcode} | {deliveryList[showDeliveryInfo].paymentStatus === 'paid' ? 'Paid' : `£${deliveryList[showDeliveryInfo].amountDue.toFixed(2)}`}
+      </p>
+      {deliveryList[showDeliveryInfo].paymentStatus === 'not-paid' && (
+      <>
+        <p
+          className={`mb-2 text-[clamp(0.875rem,3vw,1rem)] ${
+            isDarkMode ? 'text-gray-200' : 'text-gray-600'
+          }`}
+        >
+          <strong>Change:</strong> £{deliveryList[showDeliveryInfo].changeDue}
+        </p>
+
+        {/* Per-delivery change breakdown */}
+        <div
+          className={`mb-2 text-[clamp(0.875rem,3vw,1rem)] ${
+            isDarkMode ? 'text-gray-200' : 'text-gray-600'
+          }`}
+        >
+          <strong>Breakdown:</strong>
+          <ul className="list-disc list-inside">
+            {Object.entries(
+              getChangeBreakdownObject(deliveryList[showDeliveryInfo].changeDue)
+            ).map(([name, count]) => (
+              <li key={name}>
+                {count} × {name}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </>
+    )}
+      {deliveryList[showDeliveryInfo].details && (
+  <p
+    className={`mb-2 text-[clamp(0.875rem,3vw,1rem)] ${
+      isDarkMode ? 'text-gray-200' : 'text-gray-600'
+    }`}
+    dangerouslySetInnerHTML={{
+      __html: `<strong>Details:</strong><br />${deliveryList[
+        showDeliveryInfo
+      ].details.replace(/\\n|\n/g, '<br />')}`,
+    }}
+  />
+)}
+
+      <p className={`mb-2 text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
+        <strong>Date:</strong> {formatTimestamp(deliveryList[showDeliveryInfo].timestamp).date}
+      </p>
+      <p className={`mb-4 text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
+        <strong>Time:</strong> {formatTimestamp(deliveryList[showDeliveryInfo].timestamp).time}
+      </p>
+
+      <div className="flex justify-between mt-4">
+        <button
+          onClick={() => {
+            // Close details and open edit popup for this delivery
+            setIsClosingDeliveryInfo(true);
+            setTimeout(() => {
+              const current = showDeliveryInfo;
+              setShowDeliveryInfo(null);
+              setIsClosingDeliveryInfo(false);
+              openEditPopup(current);
+            }, 300);
+          }}
+          className="px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-600 shadow-md text-[clamp(0.875rem,3vw,1rem)]"
+        >
+          Edit
+        </button>
+
+        <div className="flex space-x-2">
+          <button
+            onClick={() => {
+              setIsClosingDeliveryInfo(true);
+              setTimeout(() => {
+                setShowDeliveryInfo(null);
+                setIsClosingDeliveryInfo(false);
+              }, 300);
+            }}
+            className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-400 shadow-md text-[clamp(0.875rem,3vw,1rem)]"
+          >
+            Close
+          </button>
+          <button
+            onClick={() => markDelivered(showDeliveryInfo)}
+            className="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-600 shadow-md text-[clamp(0.875rem,3vw,1rem)]"
+          >
+            Mark Delivered
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
+
+            {/* === POPUP: Confirm Payment === */}
+
+
+
             {showChangeConfirmationPopup && showDeliveryInfo !== null && deliveryList[showDeliveryInfo] && (
               <div
-                className={`fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center ${isClosingChangeConfirmationPopup ? 'fade-out' : 'fade-in'}`}
+                className={`fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[100]`}
                 onClick={() => {
                   setIsClosingChangeConfirmationPopup(true);
                   setTimeout(() => {
@@ -1030,8 +1634,31 @@
                     className={`w-full p-2 border rounded-lg mb-4 ${isDarkMode ? 'bg-gray-700 text-white placeholder-gray-400 border-gray-600' : 'bg-gray-200 text-gray-900 placeholder-gray-500 border-gray-300'}`}
                     aria-label="Customer paid amount"
                   />
-                  <p className={`mb-4 text-[clamp(0.875rem,3vw,1rem)] font-semibold ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>
+                  <p className={`mb-4 text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
                     Change to Give: £{calculateCustomerChange(deliveryList[showDeliveryInfo].amountDue, customerPaidAmount)}
+          {/* Coin / Note Breakdown */}
+          {parseFloat(customerPaidAmount) > 0 &&
+            calculateCustomerChange(deliveryList[showDeliveryInfo].amountDue, customerPaidAmount) > 0 && (
+              <div
+                className={`mb-2 text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}
+              >
+                <strong>Breakdown:</strong>
+                <ul className="list-disc list-inside">
+                  {Object.entries(
+                    getChangeBreakdownObject(
+                      calculateCustomerChange(
+                        deliveryList[showDeliveryInfo].amountDue,
+                        customerPaidAmount
+                      )
+                    )
+                  ).map(([name, count]) => (
+                    <li key={name}>
+                      {count} × {name}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
                   </p>
                   <NumberKeypad value={customerPaidAmount} onChange={setCustomerPaidAmount} />
                   <div className="flex justify-between space-x-2 mt-4">
@@ -1067,6 +1694,186 @@
               </div>
             )}
 
+            {/* === POPUP: Quick Change Calculator === */}
+			{/* === POPUP: Total Change Summary === */}
+{showChangeSummary && (
+  <div
+    className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[100]"
+    onClick={() => {
+      setIsClosingChangeConfirmationPopup(true);
+      setTimeout(() => {
+        setShowChangeSummary(false);
+        setIsClosingChangeConfirmationPopup(false);
+      }, 300);
+    }}
+  >
+    <div
+      className={`p-6 rounded-lg w-[90vw] max-w-md shadow-lg overflow-y-auto max-h-[80vh] ${
+        isDarkMode ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-900'
+      }`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <h2 className="text-xl font-bold mb-4 text-center">Total Change Needed</h2>
+
+      {Object.keys(combineBreakdowns(deliveryList)).length === 0 ? (
+        <p className="text-center text-gray-400">No unpaid deliveries found.</p>
+      ) : (
+        <>
+          {/* 💰 Total Value */}
+          <p className="text-center font-semibold mb-3">
+            Total Value: £
+            {(
+              Object.entries(combineBreakdowns(deliveryList)).reduce(
+                (sum, [name, count]) =>
+                  sum +
+                  count *
+                    (denominations.find((d) => d.name === name)?.value || 0),
+                0
+              ) / 100
+            ).toFixed(2)}
+          </p>
+
+          {/* 🪙 Denomination Breakdown */}
+          <ul className="list-disc list-inside space-y-1 text-sm">
+  {Object.entries(combineBreakdowns(deliveryList))
+    .sort(
+      ([aName], [bName]) =>
+        (denominations.find((d) => d.name === bName)?.value || 0) -
+        (denominations.find((d) => d.name === aName)?.value || 0)
+    )
+    .map(([name, count]) => (
+      <li key={name}>
+        {count} × {name}
+      </li>
+    ))}
+</ul>
+
+        </>
+      )}
+
+      <div className="flex justify-end mt-6">
+        <button
+          onClick={() => {
+            setIsClosingChangeConfirmationPopup(true);
+            setTimeout(() => {
+              setShowChangeSummary(false);
+              setIsClosingChangeConfirmationPopup(false);
+            }, 300);
+          }}
+          className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-400 shadow-md"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+
+
+
+            {showQuickCalculatorPopup && (
+  <div
+    className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[100]"
+    onClick={() => {
+      setIsClosingQuickCalculatorPopup(true);
+      setTimeout(() => {
+        setShowQuickCalculatorPopup(false);
+        setIsClosingQuickCalculatorPopup(false);
+        setQuickCalcAmount('');
+      }, 300);
+    }}
+  >
+    <div
+      className={`flex flex-col justify-between p-6 rounded-lg w-[90vw] max-w-md h-[80vh] shadow-lg ${
+        isDarkMode ? 'bg-gray-800' : 'bg-gray-200'
+      }`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* === Scrollable Top Section === */}
+      <div
+        className="flex-1 overflow-y-auto mb-4 transition-all duration-300"
+        style={{ scrollBehavior: 'smooth' }}
+      >
+        <h2
+          className={`text-[clamp(1.25rem,4vw,1.5rem)] font-semibold mb-4 ${
+            isDarkMode ? 'text-white' : 'text-gray-900'
+          }`}
+        >
+          Quick Change Calculator
+        </h2>
+
+        <input
+          type="text"
+          readOnly
+          value={quickCalcAmount}
+          placeholder="Enter amount due (£)"
+          className={`w-full p-2 border rounded-lg mb-4 ${
+            isDarkMode
+              ? 'bg-gray-700 text-white placeholder-gray-400 border-gray-600'
+              : 'bg-gray-200 text-gray-900 placeholder-gray-500 border-gray-300'
+          }`}
+          aria-label="Amount due for calculation"
+        />
+
+        {/* 💷 CALCULATED CHANGE */}
+        <p
+          className={`text-[clamp(0.875rem,3vw,1rem)] mb-2 ${
+            isDarkMode ? 'text-gray-200' : 'text-gray-600'
+          }`}
+        >
+          Change Needed: £{calculateChange(quickCalcAmount)}
+        </p>
+
+        {/* 🪙 BREAKDOWN SECTION */}
+        {parseFloat(quickCalcAmount) > 0 && calculateChange(quickCalcAmount) > 0 && (
+          <div
+            className={`text-[clamp(0.875rem,3vw,1rem)] ${
+              isDarkMode ? 'text-gray-200' : 'text-gray-600'
+            }`}
+          >
+            <strong>Breakdown:</strong>
+            <ul className="list-disc list-inside">
+              {Object.entries(
+                getChangeBreakdownObject(calculateChange(quickCalcAmount))
+              ).map(([name, count]) => (
+                <li key={name}>
+                  {count} × {name}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* === Fixed Bottom Section (Keypad + Button) === */}
+      <div className="flex-shrink-0">
+        <NumberKeypad value={quickCalcAmount} onChange={setQuickCalcAmount} />
+        <div className="flex justify-end mt-4">
+          <button
+            onClick={() => {
+              setIsClosingQuickCalculatorPopup(true);
+              setTimeout(() => {
+                setShowQuickCalculatorPopup(false);
+                setIsClosingQuickCalculatorPopup(false);
+                setQuickCalcAmount('');
+              }, 300);
+            }}
+            className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-400 shadow-md text-[clamp(0.875rem,3vw,1rem)]"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
+
+
+            {/* === PANEL: Delivery History === */}
+
+
             {showHistoryPopup && (
               <div
                 className={`fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center ${isClosingHistoryPopup ? 'fade-out' : 'fade-in'}`}
@@ -1091,14 +1898,47 @@
                           key={index}
                           className={`p-3 rounded-lg ${isDarkMode ? 'bg-gray-700' : 'bg-gray-300'}`}
                         >
-                          <p className={`font-semibold text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                            {delivery.postcode}
-                          </p>
+                          <div className="flex justify-between items-center">
+                            <div className="delivery-display">
+                              <p className={`text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
+                                {delivery.postcode} | {delivery.paymentStatus === 'paid' ? 'Paid' : `£${delivery.amountDue.toFixed(2)}`}
+                              </p>
+                            </div>
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={() => openHistoryEditPopup(index)}
+                                className="text-blue-500 hover:text-blue-700"
+                                aria-label="Edit history delivery"
+                              >
+                                <i className="fas fa-edit"></i>
+                              </button>
+                              <button
+                                onClick={() => setShowHistoryDeleteConfirm(index)}
+                                className="text-red-500 hover:text-red-700"
+                                aria-label="Delete history delivery"
+                              >
+                                <i className="fas fa-trash"></i>
+                              </button>
+                            </div>
+                          </div>
+                          {delivery.paymentStatus === 'not-paid' && (
+                            <p className={`text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
+                              Change: £{delivery.changeDue}
+                            </p>
+                          )}
+                          {delivery.details && (
+  <p
+    className={`text-[clamp(0.875rem,3vw,1rem)] ${
+      isDarkMode ? 'text-gray-200' : 'text-gray-600'
+    }`}
+    dangerouslySetInnerHTML={{
+      __html: `<strong>Details:</strong><br />${delivery.details.replace(/\\n|\n/g, '<br />')}`,
+    }}
+  />
+)}
+
                           <p className={`text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
-                            {formatHistoryPayment(delivery)}
-                          </p>
-                          <p className={`text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
-                            <strong>Day:</strong> {formatTimestamp(delivery.timestamp).day}
+                            <strong>Date:</strong> {formatTimestamp(delivery.timestamp).date}
                           </p>
                           <p className={`text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
                             <strong>Time:</strong> {formatTimestamp(delivery.timestamp).time}
@@ -1119,73 +1959,183 @@
               </div>
             )}
 
+            {/* === PANEL: Changelog === */}
+
+
             {showChangelogPopup && (
-              <div
-                className={`fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center ${isClosingChangelogPopup ? 'fade-out' : 'fade-in'}`}
-                onClick={toggleChangelogPopup}
-              >
-                <div
-                  className={`p-6 rounded-lg w-[90vw] max-w-md shadow-lg ${isDarkMode ? 'bg-gray-800 text-gray-200' : 'bg-gray-200 text-gray-900'}`}
-                  onClick={(e) => e.stopPropagation()}
-                  style={{ maxHeight: '70vh', overflowY: 'auto' }}
-                >
-                  <h3 className={`text-[clamp(1.25rem,4vw,1.5rem)] font-bold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                    Changelog
-                  </h3>
-                  <div className="changelog-list space-y-4">
-                    <div>
-                      <h4 className={`text-[clamp(1rem,3vw,1.125rem)] font-semibold mb-2 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>v2.0</h4>
-                      <ul className="space-y-1 text-sm">
-                        <li><span className="added">➕ </span>Removed date display, kept day name only</li>
-                        <li><span className="added">➕ </span>Moved toast notifications to bottom of screen</li>
-                        <li><span className="added">➕ </span>Redesigned changelog with professional formatting</li>
-                      </ul>
-                    </div>
-                    <div>
-                      <h4 className={`text-[clamp(1rem,3vw,1.125rem)] font-semibold mb-2 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>v1.9</h4>
-                      <ul className="space-y-1 text-sm">
-                        <li><span className="added">➕ </span>Added daily totals dashboard</li>
-                        <li><span className="removed">➖ </span>Removed suggested change display from payment confirmation</li>
-                      </ul>
-                    </div>
-                    <div>
-                      <h4 className={`text-[clamp(1rem,3vw,1.125rem)] font-semibold mb-2 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>v1.8</h4>
-                      <ul className="space-y-1 text-sm">
-                        <li><span className="added">➕ </span>Added error boundary for runtime error handling</li>
-                        <li><span className="changed">🔄 </span>Updated to latest React 18 CDN</li>
-                      </ul>
-                    </div>
-                    <div>
-                      <h4 className={`text-[clamp(1rem,3vw,1.125rem)] font-semibold mb-2 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>v1.7</h4>
-                      <ul className="space-y-1 text-sm">
-                        <li><span className="added">➕ </span>Payment confirmation with change calculator</li>
-                        <li><span className="added">➕ </span>"Keep the Change" option</li>
-                        <li><span className="added">➕ </span>Actual payment tracking in history</li>
-                      </ul>
-                    </div>
-                    <div>
-                      <h4 className={`text-[clamp(1rem,3vw,1.125rem)] font-semibold mb-2 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>v1.0</h4>
-                      <ul className="space-y-1 text-sm">
-                        <li><span className="added">➕ </span>Initial release with core delivery tracking</li>
-                        <li><span className="added">➕ </span>Dark/light theme toggle</li>
-                        <li><span className="added">➕ </span>Grid/list view toggle</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-                <button
-                  onClick={toggleChangelogPopup}
-                  className={`changelog-close px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-600 shadow-md text-[clamp(0.875rem,3vw,1rem)]`}
-                >
-                  Close
-                </button>
-              </div>
-            )}
+  <div
+    className={`fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[100]`}
+    onClick={() => {
+      setIsClosingChangelogPopup(true);
+      setTimeout(() => {
+        setShowChangelogPopup(false);
+        setIsClosingChangelogPopup(false);
+      }, 300);
+    }}
+  >
+    <div
+      className={`p-6 rounded-lg w-[90vw] max-w-md shadow-lg overflow-y-auto max-h-[80vh] ${
+        isDarkMode ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-900'
+      }`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <h2 className="text-xl font-bold mb-4 text-center">Changelog</h2>
+
+      <div className="space-y-6 text-sm">
+
+        {/* === V5.1 === */}
+        <div>
+          <h3 className="font-bold">V5.1</h3>
+          <ul className="list-none mt-2 space-y-1">
+            <li className="text-gray-400">⚙️ Fixed popup overlap issue on mobile.</li>
+            <li className="text-gray-400">⚙️ Better button alignment and spacing.</li>
+            <li className="text-gray-400">⚙️ Minor performance and animation improvements.</li>
+          </ul>
+        </div>
+
+        {/* === V5.0 === */}
+        <div>
+          <h3 className="font-bold">V5.0</h3>
+          <ul className="list-none mt-2 space-y-1">
+            <li className="text-green-500">🟩 Added a new “Total Change” button next to Reset Day.</li>
+            <li className="text-green-500">🟩 Instantly see all coins and notes needed across unpaid deliveries.</li>
+            <li className="text-green-500">🟩 Shows total cash value of all change combined.</li>
+            <li className="text-green-500">🟩 Sorted neatly from highest to lowest denomination (£20 → 1p).</li>
+            <li className="text-gray-400">⚙️ Polished dark mode visuals and popup animations.</li>
+            <li className="text-gray-400">⚙️ Fixed layout quirks for smoother use on all screens.</li>
+          </ul>
+        </div>
+
+        {/* === V4.1 === */}
+        <div>
+          <h3 className="font-bold">V4.1</h3>
+          <ul className="list-none mt-2 space-y-1">
+            <li className="text-gray-400">⚙️ Calculator now remembers your last entry.</li>
+            <li className="text-gray-400">⚙️ Fixed rounding issues with small coins.</li>
+            <li className="text-gray-400">⚙️ Popups open and close more smoothly.</li>
+          </ul>
+        </div>
+
+        {/* === V4.0 === */}
+        <div>
+          <h3 className="font-bold">V4.0</h3>
+          <ul className="list-none mt-2 space-y-1">
+            <li className="text-green-500">🟩 Added the Quick Change Calculator.</li>
+            <li className="text-green-500">🟩 Instantly calculate change with full coin and note breakdowns.</li>
+            <li className="text-gray-400">⚙️ Redesigned popups for a cleaner look.</li>
+            <li className="text-gray-400">⚙️ Adjusted button sizes for better mobile usability.</li>
+          </ul>
+        </div>
+
+        {/* === V3.1 === */}
+        <div>
+          <h3 className="font-bold">V3.1</h3>
+          <ul className="list-none mt-2 space-y-1">
+            <li className="text-gray-400">⚙️ Editing popups open faster and smoother.</li>
+            <li className="text-gray-400">⚙️ Fixed issue where deleted deliveries could reappear.</li>
+            <li className="text-gray-400">⚙️ Improved confirmation messages and transitions.</li>
+          </ul>
+        </div>
+
+        {/* === V3.0 === */}
+        <div>
+          <h3 className="font-bold">V3.0</h3>
+          <ul className="list-none mt-2 space-y-1">
+            <li className="text-green-500">🟩 Added Edit Delivery and Delete Delivery popups.</li>
+            <li className="text-green-500">🟩 Introduced History View for completed deliveries.</li>
+            <li className="text-green-500">🟩 Deliveries now auto-save between sessions.</li>
+            <li className="text-gray-400">⚙️ Improved Reset Day to clear everything properly.</li>
+          </ul>
+        </div>
+
+        {/* === V2.1 === */}
+        <div>
+          <h3 className="font-bold">V2.1</h3>
+          <ul className="list-none mt-2 space-y-1">
+            <li className="text-gray-400">⚙️ Fixed dark mode color contrast.</li>
+            <li className="text-gray-400">⚙️ Smoothed out popup animations.</li>
+            <li className="text-gray-400">⚙️ Adjusted text size and spacing for better visibility.</li>
+          </ul>
+        </div>
+
+        {/* === V2.0 === */}
+        <div>
+          <h3 className="font-bold">V2.0</h3>
+          <ul className="list-none mt-2 space-y-1">
+            <li className="text-green-500">🟩 Added Dark Mode / Light Mode toggle.</li>
+            <li className="text-gray-400">⚙️ Updated button styles and transitions.</li>
+            <li className="text-gray-400">⚙️ Improved readability and layout on all devices.</li>
+          </ul>
+        </div>
+
+        {/* === V1.3 === */}
+        <div>
+          <h3 className="font-bold">V1.3</h3>
+          <ul className="list-none mt-2 space-y-1">
+            <li className="text-green-500">🟩 Added Reset Day button for daily cleanups.</li>
+            <li className="text-gray-400">⚙️ Added confirmation step to prevent accidental resets.</li>
+            <li className="text-gray-400">⚙️ Improved colors and smoother text.</li>
+          </ul>
+        </div>
+
+        {/* === V1.2 === */}
+        <div>
+          <h3 className="font-bold">V1.2</h3>
+          <ul className="list-none mt-2 space-y-1">
+            <li className="text-green-500">🟩 Deliveries now auto-save after refresh.</li>
+            <li className="text-green-500">🟩 Added “No Deliveries Yet” message.</li>
+            <li className="text-gray-400">⚙️ Improved loading and flow.</li>
+          </ul>
+        </div>
+
+        {/* === V1.1 === */}
+        <div>
+          <h3 className="font-bold">V1.1</h3>
+          <ul className="list-none mt-2 space-y-1">
+            <li className="text-gray-400">⚙️ Tidied up buttons and spacing.</li>
+            <li className="text-gray-400">⚙️ Cleaned up delivery list layout.</li>
+            <li className="text-gray-400">⚙️ Fixed small display issues.</li>
+          </ul>
+        </div>
+
+        {/* === V1.0 === */}
+        <div>
+          <h3 className="font-bold">V1.0</h3>
+          <ul className="list-none mt-2 space-y-1">
+            <li className="text-green-500">🟩 The Fish & Chips Delivery Tracker is born!</li>
+            <li className="text-green-500">🟩 Add deliveries with names, totals, and payment status.</li>
+            <li className="text-green-500">🟩 Track how much you’ve made for the day.</li>
+            <li className="text-gray-400">⚙️ Simple, fast layout made for busy chip shop runs.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div className="flex justify-end mt-6">
+        <button
+          onClick={() => {
+            setIsClosingChangelogPopup(true);
+            setTimeout(() => {
+              setShowChangelogPopup(false);
+              setIsClosingChangelogPopup(false);
+            }, 300);
+          }}
+          className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-400 shadow-md"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+
 
             {showToast && (
               <div className={`toast flex items-center space-x-4 fade-in`}>
                 <p className={`font-semibold text-[clamp(0.875rem,3vw,1rem)]`}>
                   {lastAction?.type === 'add' ? 'Delivery added.' : 
+                   lastAction?.type === 'edit' ? 'Delivery edited.' : 
+                   lastAction?.type === 'delete' ? 'Delivery deleted.' : 
                    lastAction?.type === 'deliver' ? 'Delivery marked as delivered.' : 
                    lastAction?.type === 'reset' ? 'Delivery list and history reset.' : 
                    lastAction?.type === 'error' ? lastAction.data : ''}
@@ -1207,6 +2157,63 @@
 
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<App />);
-  </script>
+  
+{/* === POPUP: Total Change Breakdown === */}
+{showChangeSummary && (
+  <div
+    className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[100]"
+    onClick={() => setShowChangeSummary(false)}
+  >
+    <div
+      className={`p-6 rounded-lg w-[90vw] max-w-md shadow-lg ${
+        isDarkMode ? 'bg-gray-800' : 'bg-gray-200'
+      }`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <h2
+        className={`text-[clamp(1.25rem,4vw,1.5rem)] font-semibold mb-4 ${
+          isDarkMode ? 'text-white' : 'text-gray-900'
+        }`}
+      >
+        Total Change Breakdown
+      </h2>
+
+      {(() => {
+        const totals = combineBreakdowns(deliveryList);
+        const totalAmount = deliveryList
+          .filter((d) => d.paymentStatus === 'not-paid')
+          .reduce((acc, d) => acc + d.changeDue, 0);
+
+        return (
+          <>
+            <p
+              className={`mb-2 text-[clamp(0.875rem,3vw,1rem)] ${
+                isDarkMode ? 'text-gray-200' : 'text-gray-600'
+              }`}
+            >
+              <strong>Total Change Needed:</strong> £{totalAmount.toFixed(2)}
+            </p>
+            <ul className="list-disc list-inside mb-4">
+              {Object.entries(totals).map(([name, count]) => (
+                <li key={name}>
+                  {count} × {name}
+                </li>
+              ))}
+            </ul>
+          </>
+        );
+      })()}
+
+      <button
+        onClick={() => setShowChangeSummary(false)}
+        className="mt-2 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-400 shadow-md"
+      >
+        Close
+      </button>
+    </div>
+  </div>
+)}
+
+</script>
 </body>
 </html>
