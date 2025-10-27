@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -12,6 +13,7 @@
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.25.6/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3.2.0/dist/email.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
   <style>
     .fade-down {
@@ -725,7 +727,50 @@ const combineBreakdowns = (deliveries) => {
         }, 300);
       };
 
-      const undoAction = () => {
+      
+// 📧 Send Postcodes via EmailJS (with toast confirmation)
+const sendPostcodeEmail = () => {
+  if (historyList.length === 0) {
+    setShowToast(true);
+    setLastAction({ type: 'error', data: 'No delivery history to send.' });
+    return;
+  }
+
+  const postcodeList = historyList
+    .map(entry => entry.postcode || '')
+    .filter(p => p.trim() !== '');
+
+  if (postcodeList.length === 0) {
+    setShowToast(true);
+    setLastAction({ type: 'error', data: 'No valid postcodes found.' });
+    return;
+  }
+
+  const message = 'Delivery Postcodes:\n\n' + postcodeList.join('\n');
+
+  emailjs
+    .send(
+      'service_637q56m',
+      'template_9hu2bkl',
+      {
+        message,
+        from_email: 'jacobfazer1@gmail.com',
+        to_email: 'jacobfazer1@gmail.com',
+      },
+      'iPjziLz6-ui5TluiZ'
+    )
+    .then(() => {
+      setShowToast(true);
+      setLastAction({ type: 'success', data: '✅ Email sent successfully!' });
+    })
+    .catch(() => {
+      setShowToast(true);
+      setLastAction({ type: 'error', data: '❌ Failed to send email.' });
+    });
+};
+
+
+const undoAction = () => {
         if (!lastAction) return;
         if (lastAction.type === 'add') {
           setDeliveryList(deliveryList.slice(1));
@@ -1888,9 +1933,38 @@ const combineBreakdowns = (deliveries) => {
                   onClick={(e) => e.stopPropagation()}
                   style={{ maxHeight: '70vh', overflowY: 'auto' }}
                 >
-                  <h3 className={`text-[clamp(1.25rem,4vw,1.5rem)] font-bold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                    Delivery History
-                  </h3>
+                  <h3 className={`text-[clamp(1.25rem,4vw,1.5rem)] font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+  Delivery History
+</h3>
+
+{historyList.length > 0 && (
+  <button
+    onClick={sendPostcodeEmail}
+    className="mb-4 px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-600 shadow-md"
+  >
+    Send Postcodes
+  </button>
+)}
+
+{historyList.length === 0 ? (
+  <p>No deliveries yet.</p>
+) : (
+  <div className="space-y-3">
+    {historyList.map((delivery, index) => (
+      <div
+        key={index}
+        className={`p-3 rounded-lg shadow-md ${isDarkMode ? 'bg-gray-700 text-white' : 'bg-gray-300 text-gray-900'}`}
+      >
+        <p>
+          {delivery.postcode} |{" "}
+          {delivery.paymentStatus === "paid"
+            ? "Paid"
+            : `£${delivery.amountDue.toFixed(2)}`}
+        </p>
+      </div>
+    ))}
+  </div>
+)}
                   {historyList.length === 0 ? (
                     <p className={`text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
                       No deliveries in history.
