@@ -1,12 +1,11 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Fish & Chips Delivery Tracker</title>
-	<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
 
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
@@ -242,492 +241,554 @@ const combineBreakdowns = (deliveries) => {
   return totals;
 };
 
+// === GOOGLE SHEETS SYNC API ===
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwWgKqzGGQAlkZ0EKFYqQU9RGnmLPBu7zIEdpy2Yval4mRsreQ03lZXRt2kAPGydvBjqA/exec'; // Changed to /exec for production
 
+const api = {
+  async getDeliveries() {
+    const res = await fetch(`${GAS_URL}?action=getDeliveries`);
+    return await res.json();
+  },
+  async getHistory() {
+    const res = await fetch(`${GAS_URL}?action=getHistory`);
+    return await res.json();
+  },
+  async saveDeliveries(data) {
+    await fetch(`${GAS_URL}?action=saveDeliveries`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+      headers: { 'Content-Type': 'text/plain' }
+    });
+  },
+  async saveHistory(data) {
+    await fetch(`${GAS_URL}?action=saveHistory`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+      headers: { 'Content-Type': 'text/plain' }
+    });
+  },
+  async reset() {
+    await fetch(`${GAS_URL}?action=reset`);
+  }
+};
 
-    // Error Boundary Component
-    class ErrorBoundary extends React.Component {
-      state = { hasError: false, error: null };
+const fixTypes = (item) => ({
+  ...item,
+  amountDue: parseFloat(item.amountDue) || 0,
+  changeDue: parseFloat(item.changeDue) || 0
+});
 
-      static getDerivedStateFromError(error) {
-        return { hasError: true, error };
-      }
+// Error Boundary Component
+class ErrorBoundary extends React.Component {
+  state = { hasError: false, error: null };
 
-      componentDidCatch(error, errorInfo) {
-        console.error('ErrorBoundary caught an error:', error, errorInfo);
-      }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
 
-      render() {
-        if (this.state.hasError) {
-          return (
-            <div className="error-boundary">
-              <h2>Something went wrong.</h2>
-              <p>{this.state.error?.message || 'Please try refreshing the page.'}</p>
-            </div>
-          );
-        }
-        return this.props.children;
-      }
-    }
+  componentDidCatch(error, errorInfo) {
+    console.error('ErrorBoundary caught an error:', error, errorInfo);
+  }
 
-    const NumberKeypad = ({ value, onChange }) => {
-      const handleKeyPress = (key) => {
-        if (key === 'backspace') {
-          onChange(value.slice(0, -1));
-        } else if (key === '.' && !value.includes('.')) {
-          onChange(value + key);
-        } else if (/[0-9]/.test(key)) {
-          onChange(value + key);
-        }
-      };
-
-      const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'backspace'];
-
+  render() {
+    if (this.state.hasError) {
       return (
-        <div className="keypad">
-          {keys.map((key, index) => (
-            <div
-              key={index}
-              className="keypad-button"
-              onClick={() => handleKeyPress(key)}
-            >
-              {key === 'backspace' ? '←' : key}
-            </div>
-          ))}
+        <div className="error-boundary">
+          <h2>Something went wrong.</h2>
+          <p>{this.state.error?.message || 'Please try refreshing the page.'}</p>
         </div>
       );
-    };
+    }
+    return this.props.children;
+  }
+}
 
-    const App = () => {
-      const [deliveryList, setDeliveryList] = React.useState(() => {
-        try {
-          const saved = localStorage.getItem('deliveryList');
-          return saved ? JSON.parse(saved) : [];
-        } catch (e) {
-          console.error('Error loading deliveryList from localStorage:', e);
-          return [];
-        }
-      });
-      const [historyList, setHistoryList] = React.useState(() => {
-        try {
-          const saved = localStorage.getItem('historyList');
-          return saved ? JSON.parse(saved) : [];
-        } catch (e) {
-          console.error('Error loading historyList from localStorage:', e);
-          return [];
-        }
-      });
-      const [showDeliveryPopup, setShowDeliveryPopup] = React.useState(false);
-      const [showPaymentPopup, setShowPaymentPopup] = React.useState(false);
-      const [showHistoryPopup, setShowHistoryPopup] = React.useState(false);
-      const [showChangeConfirmationPopup, setShowChangeConfirmationPopup] = React.useState(false);
-      const [showQuickCalculatorPopup, setShowQuickCalculatorPopup] = React.useState(false);
-      const [showHistoryEditPopup, setShowHistoryEditPopup] = React.useState(null);
-      const [showHistoryDeleteConfirm, setShowHistoryDeleteConfirm] = React.useState(null);
-      const [postcode, setPostcode] = React.useState('');
-      const [amountDue, setAmountDue] = React.useState('');
-      const [details, setDetails] = React.useState('');
-      const [customerPaidAmount, setCustomerPaidAmount] = React.useState('');
-      const [quickCalcAmount, setQuickCalcAmount] = React.useState('');
-      const [paymentStatus, setPaymentStatus] = React.useState('paid');
-      const [showResetConfirm, setShowResetConfirm] = React.useState(false);
-      const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(null);
+const NumberKeypad = ({ value, onChange }) => {
+  const handleKeyPress = (key) => {
+    if (key === 'backspace') {
+      onChange(value.slice(0, -1));
+    } else if (key === '.' && !value.includes('.')) {
+      onChange(value + key);
+    } else if (/[0-9]/.test(key)) {
+      onChange(value + key);
+    }
+  };
+
+  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'backspace'];
+
+  return (
+    <div className="keypad">
+      {keys.map((key, index) => (
+        <div
+          key={index}
+          className="keypad-button"
+          onClick={() => handleKeyPress(key)}
+        >
+          {key === 'backspace' ? '←' : key}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const App = () => {
+  const [deliveryList, setDeliveryList] = React.useState([]);
+  const [historyList, setHistoryList] = React.useState([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [showDeliveryPopup, setShowDeliveryPopup] = React.useState(false);
+  const [showPaymentPopup, setShowPaymentPopup] = React.useState(false);
+  const [showHistoryPopup, setShowHistoryPopup] = React.useState(false);
+  const [showChangeConfirmationPopup, setShowChangeConfirmationPopup] = React.useState(false);
+  const [showQuickCalculatorPopup, setShowQuickCalculatorPopup] = React.useState(false);
+  const [showHistoryEditPopup, setShowHistoryEditPopup] = React.useState(null);
+  const [showHistoryDeleteConfirm, setShowHistoryDeleteConfirm] = React.useState(null);
+  const [postcode, setPostcode] = React.useState('');
+  const [amountDue, setAmountDue] = React.useState('');
+  const [details, setDetails] = React.useState('');
+  const [customerPaidAmount, setCustomerPaidAmount] = React.useState('');
+  const [quickCalcAmount, setQuickCalcAmount] = React.useState('');
+  const [paymentStatus, setPaymentStatus] = React.useState('paid');
+  const [showResetConfirm, setShowResetConfirm] = React.useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(null);
 
   // Change summary popup state
   const [showChangeSummary, setShowChangeSummary] = React.useState(false);
-      const [showEditPopup, setShowEditPopup] = React.useState(null);
-      const [showDeliveryInfo, setShowDeliveryInfo] = React.useState(null);
-      const [showChangelogPopup, setShowChangelogPopup] = React.useState(false);
-      const [fadingItemIndex, setFadingItemIndex] = React.useState(null);
-      const [slidingItems, setSlidingItems] = React.useState([]);
-      const [isClosingDeliveryPopup, setIsClosingDeliveryPopup] = React.useState(false);
-      const [isClosingPaymentPopup, setIsClosingPaymentPopup] = React.useState(false);
-      const [isClosingResetPopup, setIsClosingResetPopup] = React.useState(false);
-      const [isClosingDeletePopup, setIsClosingDeletePopup] = React.useState(false);
-      const [isClosingEditPopup, setIsClosingEditPopup] = React.useState(false);
-      const [isClosingDeliveryInfo, setIsClosingDeliveryInfo] = React.useState(false);
-      const [isClosingChangelogPopup, setIsClosingChangelogPopup] = React.useState(false);
-      const [isClosingHistoryPopup, setIsClosingHistoryPopup] = React.useState(false);
-      const [isClosingChangeConfirmationPopup, setIsClosingChangeConfirmationPopup] = React.useState(false);
-      const [isClosingQuickCalculatorPopup, setIsClosingQuickCalculatorPopup] = React.useState(false);
-      const [isClosingHistoryEditPopup, setIsClosingHistoryEditPopup] = React.useState(false);
-      const [isClosingHistoryDeletePopup, setIsClosingHistoryDeletePopup] = React.useState(false);
-      const [isGridView, setIsGridView] = React.useState(false);
-      const [isDarkMode, setIsDarkMode] = React.useState(() => {
-        try {
-          const saved = localStorage.getItem('isDarkMode');
-          return saved !== null ? JSON.parse(saved) : true;
-        } catch (e) {
-          console.error('Error loading isDarkMode from localStorage:', e);
-          return true;
-        }
-      });
-      const [showToast, setShowToast] = React.useState(false);
-      const [lastAction, setLastAction] = React.useState(null);
-      const [searchQuery, setSearchQuery] = React.useState('');
+  const [showEditPopup, setShowEditPopup] = React.useState(null);
+  const [showDeliveryInfo, setShowDeliveryInfo] = React.useState(null);
+  const [showChangelogPopup, setShowChangelogPopup] = React.useState(false);
+  const [fadingItemIndex, setFadingItemIndex] = React.useState(null);
+  const [slidingItems, setSlidingItems] = React.useState([]);
+  const [isClosingDeliveryPopup, setIsClosingDeliveryPopup] = React.useState(false);
+  const [isClosingPaymentPopup, setIsClosingPaymentPopup] = React.useState(false);
+  const [isClosingResetPopup, setIsClosingResetPopup] = React.useState(false);
+  const [isClosingDeletePopup, setIsClosingDeletePopup] = React.useState(false);
+  const [isClosingEditPopup, setIsClosingEditPopup] = React.useState(false);
+  const [isClosingDeliveryInfo, setIsClosingDeliveryInfo] = React.useState(false);
+  const [isClosingChangelogPopup, setIsClosingChangelogPopup] = React.useState(false);
+  const [isClosingHistoryPopup, setIsClosingHistoryPopup] = React.useState(false);
+  const [isClosingChangeConfirmationPopup, setIsClosingChangeConfirmationPopup] = React.useState(false);
+  const [isClosingQuickCalculatorPopup, setIsClosingQuickCalculatorPopup] = React.useState(false);
+  const [isClosingHistoryEditPopup, setIsClosingHistoryEditPopup] = React.useState(false);
+  const [isClosingHistoryDeletePopup, setIsClosingHistoryDeletePopup] = React.useState(false);
+  const [isGridView, setIsGridView] = React.useState(false);
+  const [isDarkMode, setIsDarkMode] = React.useState(() => {
+    try {
+      const saved = localStorage.getItem('isDarkMode');
+      return saved !== null ? JSON.parse(saved) : true;
+    } catch (e) {
+      console.error('Error loading isDarkMode from localStorage:', e);
+      return true;
+    }
+  });
+  const [showToast, setShowToast] = React.useState(false);
+  const [lastAction, setLastAction] = React.useState(null);
+  const [searchQuery, setSearchQuery] = React.useState('');
 
-      React.useEffect(() => {
-        try {
-          localStorage.setItem('deliveryList', JSON.stringify(deliveryList));
-        } catch (e) {
-          console.error('Error saving deliveryList to localStorage:', e);
-        }
-      }, [deliveryList]);
+  // Sync deliveries to Google Sheets
+  React.useEffect(() => {
+    if (!isLoading) {
+      api.saveDeliveries(deliveryList).catch(console.error);
+    }
+  }, [deliveryList, isLoading]);
 
-      React.useEffect(() => {
-        try {
-          localStorage.setItem('historyList', JSON.stringify(historyList));
-        } catch (e) {
-          console.error('Error saving historyList to localStorage:', e);
-        }
-      }, [historyList]);
+  // Sync history to Google Sheets
+  React.useEffect(() => {
+    if (!isLoading) {
+      api.saveHistory(historyList).catch(console.error);
+    }
+  }, [historyList, isLoading]);
 
-      React.useEffect(() => {
-        try {
-          localStorage.setItem('isDarkMode', JSON.stringify(isDarkMode));
-          document.body.className = isDarkMode ? 'dark' : 'light';
-        } catch (e) {
-          console.error('Error saving isDarkMode to localStorage:', e);
-        }
-      }, [isDarkMode]);
+  // Apply dark/light mode (no localStorage save needed unless you want it)
+  React.useEffect(() => {
+    document.body.className = isDarkMode ? 'dark' : 'light';
+  }, [isDarkMode]);
 
-      React.useEffect(() => {
-        if (showToast) {
-          const timer = setTimeout(() => {
-            setShowToast(false);
-            setLastAction(null);
-          }, 5000);
-          return () => clearTimeout(timer);
-        }
-      }, [showToast]);
-
-      const formatPostcode = (input) => {
-        if (!input) return '';
-        const cleaned = input.replace(/\s/g, '').toUpperCase();
-        const regex = /^([A-Z]{1,2}\d{1,2}[A-Z]?)?(\d[A-Z]{2})?$/;
-        const match = cleaned.match(regex);
-        if (match && match[1] && match[2]) {
-          return `${match[1]} ${match[2]}`;
-        }
-        return cleaned;
-      };
-
-      const getOrdinalSuffix = (day) => {
-        if (day > 3 && day < 21) return 'th';
-        switch (day % 10) {
-          case 1: return 'st';
-          case 2: return 'nd';
-          case 3: return 'rd';
-          default: return 'th';
-        }
-      };
-
-      const formatTimestamp = (timestamp) => {
-        try {
-          const date = new Date(timestamp);
-          if (isNaN(date.getTime())) throw new Error('Invalid timestamp');
-          const day = date.getDate();
-          const month = date.getMonth() + 1;
-          const hours = date.getHours();
-          const minutes = date.getMinutes();
-          const ampm = hours >= 12 ? 'pm' : 'am';
-          const hours12 = hours % 12 || 12;
-          const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-          const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-          
-          const formattedDay = `${dayNames[date.getDay()]} ${day}${getOrdinalSuffix(day)} ${monthNames[month - 1]}`;
-          const formattedTime = `${hours12}:${minutes.toString().padStart(2, '0')}${ampm}`;
-          
-          return {
-            date: formattedDay,
-            day: formattedDay,
-            time: formattedTime
-          };
-        } catch (e) {
-          console.error('Error formatting timestamp:', e);
-          return { date: '', day: '', time: '' };
-        }
-      };
-
-      const calculateChange = (due) => {
-        const amount = parseFloat(due) || 0;
-        if (amount <= 0) return 0;
-        const threshold = Math.ceil(amount / 20) * 20;
-        return (threshold - amount).toFixed(2);
-      };
-
-      const calculateCustomerChange = (amountDue, paid) => {
-        const due = parseFloat(amountDue) || 0;
-        const paidAmount = parseFloat(paid) || 0;
-        return paidAmount >= due ? (paidAmount - due).toFixed(2) : 0;
-      };
-
-      const handlePostcodeChange = (e) => {
-        setPostcode(formatPostcode(e.target.value));
-      };
-
-      const addDelivery = () => {
-        if (!postcode.trim()) {
-          setShowToast(true);
-          setLastAction({ type: 'error', data: 'Postcode cannot be empty.' });
-          return;
-        }
-        if (paymentStatus === 'not-paid' && (!amountDue || parseFloat(amountDue) <= 0)) {
-          setShowToast(true);
-          setLastAction({ type: 'error', data: 'Amount due must be greater than £0.' });
-          return;
-        }
-        const delivery = {
-          postcode,
-          paymentStatus,
-          amountDue: paymentStatus === 'not-paid' ? parseFloat(amountDue) || 0 : 0,
-          changeDue: paymentStatus === 'not-paid' ? calculateChange(amountDue) : 0,
-          details: details.trim(),
-          timestamp: new Date().toISOString(),
-        };
-        setDeliveryList([delivery, ...deliveryList]);
-        setLastAction({ type: 'add', data: delivery });
+  React.useEffect(() => {
+    const load = async () => {
+      try {
+        setIsLoading(true);
+        const [del, hist] = await Promise.all([
+          api.getDeliveries(),
+          api.getHistory()
+        ]);
+        setDeliveryList(del.map(fixTypes));
+        setHistoryList(hist.map(fixTypes));
+      } catch (err) {
+        console.error('Sheets load error:', err);
         setShowToast(true);
-        setIsClosingPaymentPopup(true);
-        setTimeout(() => {
-          setShowDeliveryPopup(false);
-          setShowPaymentPopup(false);
-          setIsClosingPaymentPopup(false);
-          setPostcode('');
-          setAmountDue('');
-          setDetails('');
-          setPaymentStatus('paid');
-        }, 300);
-      };
+        setLastAction({ type: 'error', data: 'Failed to sync with Google Sheets' });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    load();
+  }, []);
 
-      const addPaidDelivery = () => {
-        if (!postcode.trim()) {
-          setShowToast(true);
-          setLastAction({ type: 'error', data: 'Postcode cannot be empty.' });
-          return;
-        }
-        const delivery = {
-          postcode,
-          paymentStatus: 'paid',
-          amountDue: 0,
-          changeDue: 0,
-          details: details.trim(),
-          timestamp: new Date().toISOString(),
-        };
-        setDeliveryList([delivery, ...deliveryList]);
-        setLastAction({ type: 'add', data: delivery });
-        setShowToast(true);
-        setIsClosingDeliveryPopup(true);
-        setTimeout(() => {
-          setShowDeliveryPopup(false);
-          setIsClosingDeliveryPopup(false);
-          setPostcode('');
-          setDetails('');
-          setPaymentStatus('paid');
-        }, 300);
-      };
+  React.useEffect(() => {
+    if (showToast) {
+      const timer = setTimeout(() => {
+        setShowToast(false);
+        setLastAction(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [showToast]);
 
-      const editDelivery = (index) => {
-        if (!postcode.trim()) {
-          setShowToast(true);
-          setLastAction({ type: 'error', data: 'Postcode cannot be empty.' });
-          return;
-        }
-        if (paymentStatus === 'not-paid' && (!amountDue || parseFloat(amountDue) <= 0)) {
-          setShowToast(true);
-          setLastAction({ type: 'error', data: 'Amount due must be greater than £0.' });
-          return;
-        }
-        const updatedDelivery = {
-          postcode,
-          paymentStatus,
-          amountDue: paymentStatus === 'not-paid' ? parseFloat(amountDue) || 0 : 0,
-          changeDue: paymentStatus === 'not-paid' ? calculateChange(amountDue) : 0,
-          details: details.trim(),
-          timestamp: deliveryList[index].timestamp,
-        };
-        const updatedList = [...deliveryList];
-        updatedList[index] = updatedDelivery;
-        setDeliveryList(updatedList);
-        setLastAction({ type: 'edit', data: { ...updatedDelivery, index } });
-        setShowToast(true);
-        setIsClosingEditPopup(true);
-        setTimeout(() => {
-          setShowEditPopup(null);
-          setIsClosingEditPopup(false);
-          setPostcode('');
-          setAmountDue('');
-          setDetails('');
-          setPaymentStatus('paid');
-        }, 300);
-      };
+  const formatPostcode = (input) => {
+    if (!input) return '';
+    const cleaned = input.replace(/\s/g, '').toUpperCase();
+    const regex = /^([A-Z]{1,2}\d{1,2}[A-Z]?)?(\d[A-Z]{2})?$/;
+    const match = cleaned.match(regex);
+    if (match && match[1] && match[2]) {
+      return `${match[1]} ${match[2]}`;
+    }
+    return cleaned;
+  };
 
-      const editHistoryDelivery = (index) => {
-        if (!postcode.trim()) {
-          setShowToast(true);
-          setLastAction({ type: 'error', data: 'Postcode cannot be empty.' });
-          return;
-        }
-        if (paymentStatus === 'not-paid' && (!amountDue || parseFloat(amountDue) <= 0)) {
-          setShowToast(true);
-          setLastAction({ type: 'error', data: 'Amount due must be greater than £0.' });
-          return;
-        }
-        const updatedDelivery = {
-          postcode,
-          paymentStatus,
-          amountDue: paymentStatus === 'not-paid' ? parseFloat(amountDue) || 0 : 0,
-          changeDue: paymentStatus === 'not-paid' ? calculateChange(amountDue) : 0,
-          details: details.trim(),
-          timestamp: historyList[index].timestamp,
-        };
-        const updatedList = [...historyList];
-        updatedList[index] = updatedDelivery;
-        setHistoryList(updatedList);
-        setLastAction({ type: 'editHistory', data: { ...updatedDelivery, index } });
-        setShowToast(true);
-        setIsClosingHistoryEditPopup(true);
-        setTimeout(() => {
-          setShowHistoryEditPopup(null);
-          setIsClosingHistoryEditPopup(false);
-          setPostcode('');
-          setAmountDue('');
-          setDetails('');
-          setPaymentStatus('paid');
-        }, 300);
-      };
+  const getOrdinalSuffix = (day) => {
+    if (day > 3 && day < 21) return 'th';
+    switch (day % 10) {
+      case 1: return 'st';
+      case 2: return 'nd';
+      case 3: return 'rd';
+      default: return 'th';
+    }
+  };
 
-      const deleteDelivery = (index) => {
-        const item = deliveryList[index];
+  const formatTimestamp = (timestamp) => {
+    try {
+      const date = new Date(timestamp);
+      if (isNaN(date.getTime())) throw new Error('Invalid timestamp');
+      const day = date.getDate();
+      const month = date.getMonth() + 1;
+      const hours = date.getHours();
+      const minutes = date.getMinutes();
+      const ampm = hours >= 12 ? 'pm' : 'am';
+      const hours12 = hours % 12 || 12;
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      
+      const formattedDay = `${dayNames[date.getDay()]} ${day}${getOrdinalSuffix(day)} ${monthNames[month - 1]}`;
+      const formattedTime = `${hours12}:${minutes.toString().padStart(2, '0')}${ampm}`;
+      
+      return {
+        date: formattedDay,
+        day: formattedDay,
+        time: formattedTime
+      };
+    } catch (e) {
+      console.error('Error formatting timestamp:', e);
+      return { date: '', day: '', time: '' };
+    }
+  };
+
+  const calculateChange = (due) => {
+    const amount = parseFloat(due) || 0;
+    if (amount <= 0) return 0;
+    const threshold = Math.ceil(amount / 20) * 20;
+    return (threshold - amount).toFixed(2);
+  };
+
+  const calculateCustomerChange = (amountDue, paid) => {
+    const due = parseFloat(amountDue) || 0;
+    const paidAmount = parseFloat(paid) || 0;
+    return paidAmount >= due ? (paidAmount - due).toFixed(2) : 0;
+  };
+
+  const handlePostcodeChange = (e) => {
+    setPostcode(formatPostcode(e.target.value));
+  };
+
+  const addDelivery = () => {
+    if (!postcode.trim()) {
+      setShowToast(true);
+      setLastAction({ type: 'error', data: 'Postcode cannot be empty.' });
+      return;
+    }
+    if (paymentStatus === 'not-paid' && (!amountDue || parseFloat(amountDue) <= 0)) {
+      setShowToast(true);
+      setLastAction({ type: 'error', data: 'Amount due must be greater than £0.' });
+      return;
+    }
+    const delivery = {
+      postcode,
+      paymentStatus,
+      amountDue: paymentStatus === 'not-paid' ? parseFloat(amountDue) || 0 : 0,
+      changeDue: paymentStatus === 'not-paid' ? calculateChange(amountDue) : 0,
+      details: details.trim(),
+      timestamp: new Date().toISOString(),
+    };
+    setDeliveryList([delivery, ...deliveryList]);
+    setLastAction({ type: 'add', data: delivery });
+    setShowToast(true);
+    setIsClosingPaymentPopup(true);
+    setTimeout(() => {
+      setShowDeliveryPopup(false);
+      setShowPaymentPopup(false);
+      setIsClosingPaymentPopup(false);
+      setPostcode('');
+      setAmountDue('');
+      setDetails('');
+      setPaymentStatus('paid');
+    }, 300);
+  };
+
+  const addPaidDelivery = () => {
+    if (!postcode.trim()) {
+      setShowToast(true);
+      setLastAction({ type: 'error', data: 'Postcode cannot be empty.' });
+      return;
+    }
+    const delivery = {
+      postcode,
+      paymentStatus: 'paid',
+      amountDue: 0,
+      changeDue: 0,
+      details: details.trim(),
+      timestamp: new Date().toISOString(),
+    };
+    setDeliveryList([delivery, ...deliveryList]);
+    setLastAction({ type: 'add', data: delivery });
+    setShowToast(true);
+    setIsClosingDeliveryPopup(true);
+    setTimeout(() => {
+      setShowDeliveryPopup(false);
+      setIsClosingDeliveryPopup(false);
+      setPostcode('');
+      setDetails('');
+      setPaymentStatus('paid');
+    }, 300);
+  };
+
+  const editDelivery = (index) => {
+    if (!postcode.trim()) {
+      setShowToast(true);
+      setLastAction({ type: 'error', data: 'Postcode cannot be empty.' });
+      return;
+    }
+    if (paymentStatus === 'not-paid' && (!amountDue || parseFloat(amountDue) <= 0)) {
+      setShowToast(true);
+      setLastAction({ type: 'error', data: 'Amount due must be greater than £0.' });
+      return;
+    }
+    const updatedDelivery = {
+      postcode,
+      paymentStatus,
+      amountDue: paymentStatus === 'not-paid' ? parseFloat(amountDue) || 0 : 0,
+      changeDue: paymentStatus === 'not-paid' ? calculateChange(amountDue) : 0,
+      details: details.trim(),
+      timestamp: deliveryList[index].timestamp,
+    };
+    const updatedList = [...deliveryList];
+    updatedList[index] = updatedDelivery;
+    setDeliveryList(updatedList);
+    setLastAction({ type: 'edit', data: { ...updatedDelivery, index } });
+    setShowToast(true);
+    setIsClosingEditPopup(true);
+    setTimeout(() => {
+      setShowEditPopup(null);
+      setIsClosingEditPopup(false);
+      setPostcode('');
+      setAmountDue('');
+      setDetails('');
+      setPaymentStatus('paid');
+    }, 300);
+  };
+
+  const editHistoryDelivery = (index) => {
+    if (!postcode.trim()) {
+      setShowToast(true);
+      setLastAction({ type: 'error', data: 'Postcode cannot be empty.' });
+      return;
+    }
+    if (paymentStatus === 'not-paid' && (!amountDue || parseFloat(amountDue) <= 0)) {
+      setShowToast(true);
+      setLastAction({ type: 'error', data: 'Amount due must be greater than £0.' });
+      return;
+    }
+    const updatedDelivery = {
+      postcode,
+      paymentStatus,
+      amountDue: paymentStatus === 'not-paid' ? parseFloat(amountDue) || 0 : 0,
+      changeDue: paymentStatus === 'not-paid' ? calculateChange(amountDue) : 0,
+      details: details.trim(),
+      timestamp: historyList[index].timestamp,
+    };
+    const updatedList = [...historyList];
+    updatedList[index] = updatedDelivery;
+    setHistoryList(updatedList);
+    setLastAction({ type: 'editHistory', data: { ...updatedDelivery, index } });
+    setShowToast(true);
+    setIsClosingHistoryEditPopup(true);
+    setTimeout(() => {
+      setShowHistoryEditPopup(null);
+      setIsClosingHistoryEditPopup(false);
+      setPostcode('');
+      setAmountDue('');
+      setDetails('');
+      setPaymentStatus('paid');
+    }, 300);
+  };
+
+  const deleteDelivery = (index) => {
+    const item = deliveryList[index];
+    const updatedList = deliveryList.filter((_, i) => i !== index);
+    setDeliveryList(updatedList);
+    setLastAction({ type: 'delete', data: { ...item, index } });
+    setShowToast(true);
+    setIsClosingDeletePopup(true);
+    setTimeout(() => {
+      setShowDeleteConfirm(null);
+      setIsClosingDeletePopup(false);
+    }, 300);
+  };
+
+  const deleteHistoryDelivery = (index) => {
+    const item = historyList[index];
+    const updatedList = historyList.filter((_, i) => i !== index);
+    setHistoryList(updatedList);
+    setLastAction({ type: 'deleteHistory', data: { ...item, index } });
+    setShowToast(true);
+    setIsClosingHistoryDeletePopup(true);
+    setTimeout(() => {
+      setShowHistoryDeleteConfirm(null);
+      setIsClosingHistoryDeletePopup(false);
+    }, 300);
+  };
+
+  const markDelivered = (index) => {
+    if (!deliveryList[index]) {
+      console.error('Invalid delivery index:', index);
+      return;
+    }
+    const delivery = deliveryList[index];
+    if (delivery.paymentStatus === 'not-paid') {
+      setShowChangeConfirmationPopup(true);
+    } else {
+      setFadingItemIndex(index);
+      const item = deliveryList[index];
+      setHistoryList([item, ...historyList]);
+      setLastAction({ type: 'deliver', data: { ...item, index } });
+      setShowToast(true);
+      const itemsToSlide = isGridView ? [] : deliveryList.filter((_, i) => i > index).map((_, i) => index + i + 1);
+      setSlidingItems(itemsToSlide);
+      setTimeout(() => {
         const updatedList = deliveryList.filter((_, i) => i !== index);
         setDeliveryList(updatedList);
-        setLastAction({ type: 'delete', data: { ...item, index } });
-        setShowToast(true);
-        setIsClosingDeletePopup(true);
-        setTimeout(() => {
-          setShowDeleteConfirm(null);
-          setIsClosingDeletePopup(false);
-        }, 300);
-      };
+        setFadingItemIndex(null);
+        setSlidingItems([]);
+      }, 500);
+      setIsClosingDeliveryInfo(true);
+      setTimeout(() => {
+        setShowDeliveryInfo(null);
+        setIsClosingDeliveryInfo(false);
+      }, 300);
+    }
+  };
 
-      const deleteHistoryDelivery = (index) => {
-        const item = historyList[index];
-        const updatedList = historyList.filter((_, i) => i !== index);
-        setHistoryList(updatedList);
-        setLastAction({ type: 'deleteHistory', data: { ...item, index } });
-        setShowToast(true);
-        setIsClosingHistoryDeletePopup(true);
-        setTimeout(() => {
-          setShowHistoryDeleteConfirm(null);
-          setIsClosingHistoryDeletePopup(false);
-        }, 300);
-      };
+  const confirmDelivery = (index) => {
+  if (!deliveryList[index]) return;
 
-      const markDelivered = (index) => {
-        if (!deliveryList[index]) {
-          console.error('Invalid delivery index:', index);
-          return;
-        }
-        const delivery = deliveryList[index];
-        if (delivery.paymentStatus === 'not-paid') {
-          setShowChangeConfirmationPopup(true);
-        } else {
-          setFadingItemIndex(index);
-          const item = deliveryList[index];
-          setHistoryList([item, ...historyList]);
-          setLastAction({ type: 'deliver', data: { ...item, index } });
-          setShowToast(true);
-          const itemsToSlide = isGridView ? [] : deliveryList.filter((_, i) => i > index).map((_, i) => index + i + 1);
-          setSlidingItems(itemsToSlide);
-          setTimeout(() => {
-            const updatedList = deliveryList.filter((_, i) => i !== index);
-            setDeliveryList(updatedList);
-            setFadingItemIndex(null);
-            setSlidingItems([]);
-          }, 500);
-          setIsClosingDeliveryInfo(true);
-          setTimeout(() => {
-            setShowDeliveryInfo(null);
-            setIsClosingDeliveryInfo(false);
-          }, 300);
-        }
-      };
+  const delivery = { ...deliveryList[index] };
+  const paidAmount = parseFloat(customerPaidAmount) || 0;
+  const actualChange = paidAmount >= delivery.amountDue 
+    ? (paidAmount - delivery.amountDue).toFixed(2) 
+    : 0;
 
-      const confirmDelivery = (index) => {
-        if (!deliveryList[index]) {
-          console.error('Invalid delivery index:', index);
-          return;
-        }
-        const delivery = deliveryList[index];
-        const paidAmount = parseFloat(customerPaidAmount) || 0;
-        if (paidAmount < delivery.amountDue) {
-          setShowToast(true);
-          setLastAction({ type: 'error', data: 'Customer payment must be at least the amount due.' });
-          return;
-        }
-        setFadingItemIndex(index);
-        const item = deliveryList[index];
-        setHistoryList([item, ...historyList]);
-        setLastAction({ type: 'deliver', data: { ...item, index } });
-        setShowToast(true);
-        const itemsToSlide = isGridView ? [] : deliveryList.filter((_, i) => i > index).map((_, i) => index + i + 1);
-        setSlidingItems(itemsToSlide);
-        setTimeout(() => {
-          const updatedList = deliveryList.filter((_, i) => i !== index);
-          setDeliveryList(updatedList);
-          setFadingItemIndex(null);
-          setSlidingItems([]);
-        }, 500);
-        setIsClosingChangeConfirmationPopup(true);
-        setTimeout(() => {
-          setShowChangeConfirmationPopup(false);
-          setIsClosingChangeConfirmationPopup(false);
-          setCustomerPaidAmount('');
-          setShowDeliveryInfo(null);
-          setIsClosingDeliveryInfo(false);
-        }, 300);
-      };
+  if (paidAmount < delivery.amountDue) {
+    setShowToast(true);
+    setLastAction({ type: 'error', data: 'Customer payment must be at least the amount due.' });
+    return;
+  }
 
-      const keepTheChange = (index) => {
-        if (!deliveryList[index]) {
-          console.error('Invalid delivery index:', index);
-          return;
-        }
-        setFadingItemIndex(index);
-        const item = deliveryList[index];
-        setHistoryList([item, ...historyList]);
-        setLastAction({ type: 'deliver', data: { ...item, index } });
-        setShowToast(true);
-        const itemsToSlide = isGridView ? [] : deliveryList.filter((_, i) => i > index).map((_, i) => index + i + 1);
-        setSlidingItems(itemsToSlide);
-        setTimeout(() => {
-          const updatedList = deliveryList.filter((_, i) => i !== index);
-          setDeliveryList(updatedList);
-          setFadingItemIndex(null);
-          setSlidingItems([]);
-        }, 500);
-        setIsClosingChangeConfirmationPopup(true);
-        setTimeout(() => {
-          setShowChangeConfirmationPopup(false);
-          setIsClosingChangeConfirmationPopup(false);
-          setCustomerPaidAmount('');
-          setShowDeliveryInfo(null);
-          setIsClosingDeliveryInfo(false);
-        }, 300);
-      };
+  // Override changeDue with actual change given
+  const updatedDelivery = {
+    ...delivery,
+    changeDue: actualChange,
+    customerPaid: paidAmount // optional: track what was paid
+  };
 
-      const resetDay = () => {
-        setLastAction({ type: 'reset', data: { deliveryList: [...deliveryList], historyList: [...historyList] } });
-        setShowToast(true);
-        setDeliveryList([]);
-        setHistoryList([]);
-        setIsClosingResetPopup(true);
-        setTimeout(() => {
-          setShowResetConfirm(false);
-          setIsClosingResetPopup(false);
-        }, 300);
-      };
+  setFadingItemIndex(index);
+  setHistoryList([updatedDelivery, ...historyList]);
+  setLastAction({ type: 'deliver', data: { ...updatedDelivery, index } });
+  setShowToast(true);
 
-      
+  const itemsToSlide = isGridView ? [] : deliveryList.filter((_, i) => i > index).map((_, i) => index + i + 1);
+  setSlidingItems(itemsToSlide);
+
+  setTimeout(() => {
+    const updatedList = deliveryList.filter((_, i) => i !== index);
+    setDeliveryList(updatedList);
+    setFadingItemIndex(null);
+    setSlidingItems([]);
+  }, 500);
+
+  setIsClosingChangeConfirmationPopup(true);
+  setTimeout(() => {
+    setShowChangeConfirmationPopup(false);
+    setIsClosingChangeConfirmationPopup(false);
+    setCustomerPaidAmount('');
+    setShowDeliveryInfo(null);
+    setIsClosingDeliveryInfo(false);
+  }, 300);
+};
+
+  const keepTheChange = (index) => {
+  if (!deliveryList[index]) return;
+
+  const delivery = { ...deliveryList[index] };
+  const paidAmount = parseFloat(customerPaidAmount) || delivery.amountDue;
+  const actualChange = 0; // They kept the change → change given = £0
+
+  const updatedDelivery = {
+    ...delivery,
+    changeDue: '0.00',
+    customerPaid: paidAmount
+  };
+
+  setFadingItemIndex(index);
+  setHistoryList([updatedDelivery, ...historyList]);
+  setLastAction({ type: 'deliver', data: { ...updatedDelivery, index } });
+  setShowToast(true);
+
+  const itemsToSlide = isGridView ? [] : deliveryList.filter((_, i) => i > index).map((_, i) => index + i + 1);
+  setSlidingItems(itemsToSlide);
+
+  setTimeout(() => {
+    const updatedList = deliveryList.filter((_, i) => i !== index);
+    setDeliveryList(updatedList);
+    setFadingItemIndex(null);
+    setSlidingItems([]);
+  }, 500);
+
+  setIsClosingChangeConfirmationPopup(true);
+  setTimeout(() => {
+    setShowChangeConfirmationPopup(false);
+    setIsClosingChangeConfirmationPopup(false);
+    setCustomerPaidAmount('');
+    setShowDeliveryInfo(null);
+    setIsClosingDeliveryInfo(false);
+  }, 300);
+};
+
+  const resetDay = async () => {
+    setLastAction({ type: 'reset', data: { deliveryList: [...deliveryList], historyList: [...historyList] } });
+    setShowToast(true);
+    setDeliveryList([]);
+    setHistoryList([]);
+    try {
+      await api.reset();
+    } catch (err) {
+      console.error('Reset failed:', err);
+    }
+    setIsClosingResetPopup(true);
+    setTimeout(() => {
+      setShowResetConfirm(false);
+      setIsClosingResetPopup(false);
+    }, 300);
+  };
+
+  
 // 📧 Send Postcodes via EmailJS (with toast confirmation)
 const sendPostcodeEmail = () => {
   if (historyList.length === 0) {
@@ -879,7 +940,7 @@ const undoAction = () => {
                   >
                     <i className={`fas ${isGridView ? 'fa-bars' : 'fa-th'}`}></i>
                   </button>
-				  
+                  
                   <button
                     onClick={toggleTheme}
                     className="w-10 h-10 rounded-full bg-blue-700 text-white flex items-center justify-center text-lg font-semibold hover:bg-blue-600 scale-transition"
@@ -887,7 +948,31 @@ const undoAction = () => {
                   >
                     <i className={`fas ${isDarkMode ? 'fa-moon' : 'fa-sun'}`}></i>
                   </button>
-				  
+
+                  <button
+                    onClick={async () => {
+                      setIsLoading(true);
+                      try {
+                        const [del, hist] = await Promise.all([
+                          api.getDeliveries(),
+                          api.getHistory()
+                        ]);
+                        setDeliveryList(del.map(fixTypes));
+                        setHistoryList(hist.map(fixTypes));
+                        setShowToast(true);
+                        setLastAction({ type: 'success', data: 'Synced!' });
+                      } catch (err) {
+                        setShowToast(true);
+                        setLastAction({ type: 'error', data: 'Sync failed' });
+                      } finally {
+                        setIsLoading(false);
+                      }
+                    }}
+                    className="w-10 h-10 rounded-full bg-purple-700 text-white flex items-center justify-center text-lg font-semibold hover:bg-purple-600 scale-transition"
+                    disabled={isLoading}
+                  >
+                    <i className={`fas fa-sync ${isLoading ? 'fa-spin' : ''}`}></i>
+                  </button>
                 </div>
               </div>
               <div className="flex space-x-2">
@@ -946,82 +1031,88 @@ const undoAction = () => {
 </div>
 
 
-                <p className={`text-[clamp(1rem,4vw,1.125rem)] font-semibold mb-4 ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-                  Total Deliveries: {deliveryList.length}
-                </p>
-                <div className="relative mb-4">
-                  <input
-                    type="text"
-                    placeholder="Search by postcode or amount..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className={`w-full p-2 border rounded-lg ${isDarkMode ? 'bg-gray-700 text-white placeholder-gray-400 border-gray-600' : 'bg-gray-200 text-gray-900 placeholder-gray-500 border-gray-300'}`}
-                    aria-label="Search deliveries"
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      <i className="fas fa-times"></i>
-                    </button>
-                  )}
-                </div>
-                {filteredDeliveryList.length === 0 ? (
-                  <p className={`text-center ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>No deliveries found.</p>
-                ) : (
-                  <div className={isGridView ? 'delivery-grid' : 'space-y-3'}>
-                    {filteredDeliveryList.map((delivery, index) => (
-                      <div
-                        key={index}
-                        className={`flex ${isGridView ? '' : 'items-center justify-between p-3 rounded-lg shadow-md'} ${
-                          fadingItemIndex === index ? 'fade-down' : isGridView ? '' : slidingItems.includes(index) ? 'slide-up' : ''
-                        } ${isDarkMode ? 'bg-gray-800' : 'bg-gray-200'}`}
-                        onClick={() => setShowDeliveryInfo(index)}
-                      >
-                        <div className={isGridView ? 'delivery-display' : 'flex items-center delivery-display'}>
-                          <span className={isGridView ? '' : `text-[clamp(1rem,4vw,1.125rem)] ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                            {delivery.postcode} | {delivery.paymentStatus === 'paid' ? 'Paid' : `£${delivery.amountDue.toFixed(2)}`}
-                          </span>
-                        </div>
-                        {!isGridView && (
-                          <div className="flex space-x-2" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              onClick={() => openEditPopup(index)}
-                              className="text-blue-500 hover:text-blue-700"
-                              aria-label="Edit delivery"
-                            >
-                              <i className="fas fa-edit"></i>
-                            </button>
-                            <button
-                              onClick={() => setShowDeleteConfirm(index)}
-                              className="text-red-500 hover:text-red-700"
-                              aria-label="Delete delivery"
-                            >
-                              <i className="fas fa-trash"></i>
-                            </button>
-                          </div>
-                        )}
-                        {isGridView && (
-                          <div className="flex space-x-2 mt-2" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              onClick={() => openEditPopup(index)}
-                              className="px-3 py-1.5 bg-yellow-700 text-white rounded-lg shadow-md hover:bg-yellow-600 text-[clamp(0.75rem,3vw,0.875rem)]"
-                            >
-                              <i className="fas fa-edit"></i>
-                            </button>
-                            <button
-                              onClick={() => setShowDeleteConfirm(index)}
-                              className="px-3 py-1.5 bg-red-700 text-white rounded-lg shadow-md hover:bg-red-600 text-[clamp(0.75rem,3vw,0.875rem)]"
-                            >
-                              <i className="fas fa-trash"></i>
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                {isLoading ? (
+  <p className="text-center text-yellow-500 animate-pulse">Syncing with Google Sheets...</p>
+) : (
+  <>
+    <p className={`text-[clamp(1rem,4vw,1.125rem)] font-semibold mb-4 ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+      Total Deliveries: {deliveryList.length}
+    </p>
+    <div className="relative mb-4">
+      <input
+        type="text"
+        placeholder="Search by postcode or amount..."
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        className={`w-full p-2 border rounded-lg ${isDarkMode ? 'bg-gray-700 text-white placeholder-gray-400 border-gray-600' : 'bg-gray-200 text-gray-900 placeholder-gray-500 border-gray-300'}`}
+        aria-label="Search deliveries"
+      />
+      {searchQuery && (
+        <button
+          onClick={() => setSearchQuery('')}
+          className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+        >
+          <i className="fas fa-times"></i>
+        </button>
+      )}
+    </div>
+    {filteredDeliveryList.length === 0 ? (
+      <p className={`text-center ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>No deliveries found.</p>
+    ) : (
+      <div className={isGridView ? 'delivery-grid' : 'space-y-3'}>
+        {filteredDeliveryList.map((delivery, index) => (
+          <div
+            key={index}
+            className={`flex ${isGridView ? '' : 'items-center justify-between p-3 rounded-lg shadow-md'} ${
+              fadingItemIndex === index ? 'fade-down' : isGridView ? '' : slidingItems.includes(index) ? 'slide-up' : ''
+            } ${isDarkMode ? 'bg-gray-800' : 'bg-gray-200'}`}
+            onClick={() => setShowDeliveryInfo(index)}
+          >
+            <div className={isGridView ? 'delivery-display' : 'flex items-center delivery-display'}>
+              <span className={isGridView ? '' : `text-[clamp(1rem,4vw,1.125rem)] ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                {delivery.postcode} | {delivery.paymentStatus === 'paid' ? 'Paid' : `£${delivery.amountDue.toFixed(2)}`}
+              </span>
+            </div>
+            {!isGridView && (
+              <div className="flex space-x-2" onClick={(e) => e.stopPropagation()}>
+                <button
+                  onClick={() => openEditPopup(index)}
+                  className="text-blue-500 hover:text-blue-700"
+                  aria-label="Edit delivery"
+                >
+                  <i className="fas fa-edit"></i>
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(index)}
+                  className="text-red-500 hover:text-red-700"
+                  aria-label="Delete delivery"
+                >
+                  <i className="fas fa-trash"></i>
+                </button>
+              </div>
+            )}
+            {isGridView && (
+              <div className="flex space-x-2 mt-2" onClick={(e) => e.stopPropagation()}>
+                <button
+                  onClick={() => openEditPopup(index)}
+                  className="px-3 py-1.5 bg-yellow-700 text-white rounded-lg shadow-md hover:bg-yellow-600 text-[clamp(0.75rem,3vw,0.875rem)]"
+                >
+                  <i className="fas fa-edit"></i>
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(index)}
+                  className="px-3 py-1.5 bg-red-700 text-white rounded-lg shadow-md hover:bg-red-600 text-[clamp(0.75rem,3vw,0.875rem)]"
+                >
+                  <i className="fas fa-trash"></i>
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    )}
+  </>
+)}
               </div>
             </main>
 
@@ -1288,7 +1379,7 @@ const undoAction = () => {
     <div
       className={`p-6 rounded-lg w-[90vw] max-w-md shadow-lg overflow-y-auto max-h-[80vh] ${isDarkMode ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-900'}`}
       onClick={(e) => e.stopPropagation()}
-    >
+  >
       <h2 className="text-xl font-bold mb-4 text-center">Edit History Entry</h2>
 
       <div className="space-y-4">
@@ -2000,10 +2091,10 @@ const undoAction = () => {
                             </div>
                           </div>
                           {delivery.paymentStatus === 'not-paid' && (
-                            <p className={`text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
-                              Change: £{delivery.changeDue}
-                            </p>
-                          )}
+  <p className={`text-[clamp(0.875rem,3vw,1rem)] ${isDarkMode ? 'text-gray-200' : 'text-gray-600'}`}>
+    Change Given: £{parseFloat(delivery.changeDue).toFixed(2)}
+  </p>
+)}
                           {delivery.details && (
   <p
     className={`text-[clamp(0.875rem,3vw,1rem)] ${
@@ -2237,60 +2328,7 @@ const undoAction = () => {
     root.render(<App />);
   
 {/* === POPUP: Total Change Breakdown === */}
-{showChangeSummary && (
-  <div
-    className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[100]"
-    onClick={() => setShowChangeSummary(false)}
-  >
-    <div
-      className={`p-6 rounded-lg w-[90vw] max-w-md shadow-lg overflow-y-auto max-h-[80vh] ${
-        isDarkMode ? 'bg-gray-800' : 'bg-gray-200'
-      }`}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <h2
-        className={`text-[clamp(1.25rem,4vw,1.5rem)] font-semibold mb-4 ${
-          isDarkMode ? 'text-white' : 'text-gray-900'
-        }`}
-      >
-        Total Change Breakdown
-      </h2>
 
-      {(() => {
-        const totals = combineBreakdowns(deliveryList);
-        const totalAmount = deliveryList
-          .filter((d) => d.paymentStatus === 'not-paid')
-          .reduce((acc, d) => acc + d.changeDue, 0);
-
-        return (
-          <>
-            <p
-              className={`mb-2 text-[clamp(0.875rem,3vw,1rem)] ${
-                isDarkMode ? 'text-gray-200' : 'text-gray-600'
-              }`}
-            >
-              <strong>Total Change Needed:</strong> £{totalAmount.toFixed(2)}
-            </p>
-            <ul className="list-disc list-inside mb-4">
-              {Object.entries(totals).map(([name, count]) => (
-                <li key={name}>
-                  {count} × {name}
-                </li>
-              ))}
-            </ul>
-          </>
-        );
-      })()}
-
-      <button
-        onClick={() => setShowChangeSummary(false)}
-        className="mt-2 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-400 shadow-md"
-      >
-        Close
-      </button>
-    </div>
-  </div>
-)}
 
 </script>
 </body>
